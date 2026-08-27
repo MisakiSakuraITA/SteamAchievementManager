@@ -11,6 +11,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SAM.Game", "SAM.Game\SAM.Ga
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SAM.Core", "SAM.Core\SAM.Core.csproj", "{64BA6245-650E-46E3-AE40-449D0F00BB47}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SAM.UI", "SAM.UI\SAM.UI.csproj", "{7B1E4C6A-2F53-4D18-9E0B-51A4E7C29D31}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
@@ -33,6 +35,10 @@ Global
 		{64BA6245-650E-46E3-AE40-449D0F00BB47}.Debug|x86.Build.0 = Debug|x86
 		{64BA6245-650E-46E3-AE40-449D0F00BB47}.Release|x86.ActiveCfg = Release|x86
 		{64BA6245-650E-46E3-AE40-449D0F00BB47}.Release|x86.Build.0 = Release|x86
+		{7B1E4C6A-2F53-4D18-9E0B-51A4E7C29D31}.Debug|x86.ActiveCfg = Debug|x86
+		{7B1E4C6A-2F53-4D18-9E0B-51A4E7C29D31}.Debug|x86.Build.0 = Debug|x86
+		{7B1E4C6A-2F53-4D18-9E0B-51A4E7C29D31}.Release|x86.ActiveCfg = Release|x86
+		{7B1E4C6A-2F53-4D18-9E0B-51A4E7C29D31}.Release|x86.Build.0 = Release|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

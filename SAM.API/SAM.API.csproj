@@ -18,14 +18,14 @@
     <RepositoryType>Git</RepositoryType>
   </PropertyGroup>
   <PropertyGroup>
-    <TargetFramework>net48</TargetFramework>
-    <LangVersion>9.0</LangVersion>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>disable</Nullable>
     <Platforms>x86</Platforms>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
+    <PlatformTarget>x86</PlatformTarget>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x86'">
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- steamclient.dll exports 32-bit thiscall member functions; the whole stack is
+         pinned to x86 because of it. -->
+    <SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
   </PropertyGroup>
 </Project>

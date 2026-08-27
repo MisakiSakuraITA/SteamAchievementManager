@@ -10,6 +10,12 @@ There are some changes to the code since the last closed-source release:
 - General code maintenance to bring it into a more modern state.
 - Icons have been replaced with ones from the Fugue Icons set.
 - Version has been bumped to 7.0.x.x to indicate the open-source release.
+- The interface has been rebuilt in WPF with a dark theme.
+
+## Requirements
+
+- The [.NET Desktop Runtime 8.0, **x86**](https://dotnet.microsoft.com/download/dotnet/8.0). The x86 build is required, not x64: SAM talks to `steamclient.dll`, which is 32-bit.
+- Windows 10 or later for the dark window frame. On earlier versions the app still runs, with a standard light title bar.
 
 [Download latest release](https://github.com/gibbed/SteamAchievementManager/releases/latest).
 

@@ -12,7 +12,7 @@ skip_commits:
 
 max_jobs: 1
 
-image: Visual Studio 2019
+image: Visual Studio 2022
 
 clone_folder: c:\projects\SAM
 
@@ -41,12 +41,12 @@ build:
   verbosity: minimal
 
 before_build:
-  - nuget restore
+  - dotnet restore SAM.sln
   
 after_build:
   - set TZ=GMT
   - git log . > git-log.txt
-  - 7z a -r -tzip -mx=9 -x!*/LICENSE.txt SteamAchievementManager-%APPVEYOR_BUILD_VERSION%.zip ./LICENSE.txt ./git-log.txt ./upload/*.exe ./upload/*.dll
+  - 7z a -r -tzip -mx=9 -x!*/LICENSE.txt SteamAchievementManager-%APPVEYOR_BUILD_VERSION%.zip ./LICENSE.txt ./git-log.txt ./upload/*.exe ./upload/*.dll ./upload/*.json
 
 artifacts:
   - path: '*-*.zip'

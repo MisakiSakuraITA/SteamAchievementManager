@@ -1,4 +1,4 @@
-[assembly: System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1004:GenericMethodsShouldProvideTypeParameter", Scope = "member", Target = "SAM.API.NativeWrapper`1.#Call`1(System.IntPtr,System.Object[])")]
+﻿[assembly: System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1004:GenericMethodsShouldProvideTypeParameter", Scope = "member", Target = "SAM.API.NativeWrapper`1.#Call`1(System.IntPtr,System.Object[])")]
 [assembly: System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1004:GenericMethodsShouldProvideTypeParameter", Scope = "member", Target = "SAM.API.NativeWrapper`1.#Call`2(System.IntPtr,System.Object[])")]
 [assembly: System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1004:GenericMethodsShouldProvideTypeParameter", Scope = "member", Target = "SAM.API.NativeWrapper`1.#GetDelegate`1(System.IntPtr)")]
 [assembly: System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1009:DeclareEventHandlersCorrectly", Scope = "member", Target = "SAM.API.Callback.#OnRun")]

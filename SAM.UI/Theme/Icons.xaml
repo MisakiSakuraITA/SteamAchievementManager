@@ -1,0 +1,63 @@
+﻿<!--
+    Copyright (c) 2024 Rick (rick 'at' gibbed 'dot' us)
+
+    This software is provided 'as-is', without any express or implied
+    warranty. In no event will the authors be held liable for any damages
+    arising from the use of this software.
+
+    Permission is granted to anyone to use this software for any purpose,
+    including commercial applications, and to alter it and redistribute it
+    freely, subject to the following restrictions:
+
+    1. The origin of this software must not be misrepresented; you must not
+       claim that you wrote the original software. If you use this software
+       in a product, an acknowledgment in the product documentation would
+       be appreciated but is not required.
+
+    2. Altered source versions must be plainly marked as such, and must not
+       be misrepresented as being the original software.
+
+    3. This notice may not be removed or altered from any source
+       distribution.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        Stroked 24x24 outlines. Drawing them as geometry rather than shipping bitmaps keeps
+        them crisp at any DPI and lets them take their colour from the theme.
+    -->
+
+    <Geometry x:Key="Icon.Search">M 10,3 A 7,7 0 1 0 10,17 A 7,7 0 1 0 10,3 M 15.2,15.2 L 21,21</Geometry>
+    <Geometry x:Key="Icon.Refresh">M 20,7 A 8,8 0 1 0 21,13 M 20,3 L 20,7.6 L 15.4,7.6</Geometry>
+    <Geometry x:Key="Icon.Plus">M 12,5 L 12,19 M 5,12 L 19,12</Geometry>
+    <Geometry x:Key="Icon.Play">M 8,5 L 19,12 L 8,19 Z</Geometry>
+    <Geometry x:Key="Icon.Save">M 5,4 L 15.5,4 L 20,8.5 L 20,20 L 5,20 Z M 8,4 L 8,10 L 16,10 L 16,4 M 8,20 L 8,14 L 16,14 L 16,20</Geometry>
+    <Geometry x:Key="Icon.Lock">M 6,11 L 18,11 L 18,20 L 6,20 Z M 8.5,11 L 8.5,7.5 A 3.5,3.5 0 0 1 15.5,7.5 L 15.5,11</Geometry>
+    <Geometry x:Key="Icon.Unlock">M 6,11 L 18,11 L 18,20 L 6,20 Z M 8.5,11 L 8.5,7.5 A 3.5,3.5 0 0 1 15.5,7.5</Geometry>
+    <Geometry x:Key="Icon.Invert">M 4,8 L 16,8 M 12,4 L 16,8 L 12,12 M 20,16 L 8,16 M 12,12 L 8,16 L 12,20</Geometry>
+    <Geometry x:Key="Icon.Reset">M 6,7 L 18,7 L 17,20 L 7,20 Z M 9.5,7 L 9.5,4 L 14.5,4 L 14.5,7 M 10,11 L 10,16 M 14,11 L 14,16</Geometry>
+    <Geometry x:Key="Icon.Warning">M 12,4 L 21,19.5 L 3,19.5 Z M 12,10 L 12,14.5 M 12,17 L 12,17.01</Geometry>
+    <Geometry x:Key="Icon.Filter">M 3,5 L 21,5 L 14,13 L 14,20 L 10,17.5 L 10,13 Z</Geometry>
+    <Geometry x:Key="Icon.Sort">M 4,6 L 14,6 M 4,12 L 12,12 M 4,18 L 10,18 M 17,5 L 17,19 M 14,16 L 17,19 L 20,16</Geometry>
+    <Geometry x:Key="Icon.Empty">M 4,6 L 20,6 L 20,18 L 4,18 Z M 4,14 L 9,10 L 13,13.5 L 16,11.5 L 20,15</Geometry>
+
+    <Style x:Key="Icon.Stroked" TargetType="{x:Type Path}">
+        <Setter Property="Stretch" Value="Uniform" />
+        <Setter Property="Width" Value="15" />
+        <Setter Property="Height" Value="15" />
+        <Setter Property="Stroke" Value="{Binding Path=(TextElement.Foreground), RelativeSource={RelativeSource Self}}" />
+        <Setter Property="StrokeThickness" Value="1.7" />
+        <Setter Property="StrokeStartLineCap" Value="Round" />
+        <Setter Property="StrokeEndLineCap" Value="Round" />
+        <Setter Property="StrokeLineJoin" Value="Round" />
+        <Setter Property="Fill" Value="Transparent" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+    </Style>
+
+    <Style x:Key="Icon.Filled" TargetType="{x:Type Path}" BasedOn="{StaticResource Icon.Stroked}">
+        <Setter Property="Fill" Value="{Binding Path=(TextElement.Foreground), RelativeSource={RelativeSource Self}}" />
+        <Setter Property="StrokeThickness" Value="0" />
+    </Style>
+
+</ResourceDictionary>

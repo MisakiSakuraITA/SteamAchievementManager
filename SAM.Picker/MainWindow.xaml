@@ -1,0 +1,318 @@
+﻿<ui:ThemedWindow x:Class="SAM.Picker.MainWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="clr-namespace:SAM.UI;assembly=SAM.UI"
+                 xmlns:controls="clr-namespace:SAM.UI.Controls;assembly=SAM.UI"
+                 xmlns:conv="clr-namespace:SAM.UI.Converters;assembly=SAM.UI"
+                 xmlns:vm="clr-namespace:SAM.Core.ViewModels;assembly=SAM.Core"
+                 Title="Steam Achievement Manager"
+                 Width="1080" Height="720"
+                 MinWidth="640" MinHeight="420"
+                 WindowStartupLocation="CenterScreen">
+
+    <Window.Resources>
+        <conv:BooleanToVisibilityConverter x:Key="BoolToVisible" />
+        <conv:BooleanToVisibilityConverter x:Key="BoolToHidden" Invert="True" />
+        <conv:HasValueToVisibilityConverter x:Key="EmptyToVisible" Invert="True" />
+        <conv:EnumToBooleanConverter x:Key="EnumToBool" />
+
+        <!-- One library card. -->
+        <DataTemplate x:Key="GameCardTemplate" DataType="{x:Type vm:GameViewModel}">
+            <Grid Margin="6">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="86" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0"
+                        Background="{StaticResource Brush.Bg.Input}"
+                        CornerRadius="4,4,0,0"
+                        ClipToBounds="True">
+                    <Grid>
+                        <!-- Shown until the capsule resolves, and for apps with no artwork. -->
+                        <Path Style="{StaticResource Icon.Stroked}"
+                              Width="26" Height="26"
+                              Data="{StaticResource Icon.Empty}"
+                              Stroke="{StaticResource Brush.Text.Muted}"
+                              Opacity="0.5"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center" />
+
+                        <controls:CachedImage Cache="{Binding DataContext.Capsules, RelativeSource={RelativeSource AncestorType=Window}}"
+                                              CacheIdentity="{Binding CapsuleIdentity}"
+                                              SourceUri="{Binding CapsuleUri}"
+                                              DecodeWidth="228"
+                                              Stretch="UniformToFill"
+                                              RenderOptions.BitmapScalingMode="HighQuality" />
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="1"
+                        Background="{StaticResource Brush.Bg.Elevated}"
+                        CornerRadius="0,0,4,4"
+                        Padding="9,6">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource Text.Body}"
+                                   Text="{Binding Name}"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxHeight="34"
+                                   TextWrapping="Wrap"
+                                   ToolTip="{Binding Name}" />
+                        <TextBlock Style="{StaticResource Text.Mono}"
+                                   Margin="0,2,0,0"
+                                   Text="{Binding IdText}" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </DataTemplate>
+
+        <!-- Card container: selection and hover states live here, not in the template. -->
+        <Style x:Key="GameCardContainer" TargetType="{x:Type ListBoxItem}">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ListBoxItem}">
+                        <Border x:Name="Root"
+                                Margin="4"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                BorderThickness="2"
+                                CornerRadius="7"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource Brush.Border.Strong}" />
+                                <Setter TargetName="Root" Property="Background" Value="{StaticResource Brush.Bg.Surface}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource Brush.Accent}" />
+                                <Setter TargetName="Root" Property="Background" Value="{StaticResource Brush.Accent.Dim}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource Brush.Accent.Hover}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- ============================ toolbar ============================ -->
+
+        <Border Grid.Row="0"
+                Background="{StaticResource Brush.Bg.Surface}"
+                BorderBrush="{StaticResource Brush.Border.Subtle}"
+                BorderThickness="0,0,0,1"
+                Padding="14,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MaxWidth="360" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- search -->
+                <Grid Grid.Column="0" MinWidth="210">
+                    <TextBox x:Name="_SearchBox"
+                             Padding="32,5,10,5"
+                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                    <Path Style="{StaticResource Icon.Stroked}"
+                          Margin="10,0,0,0"
+                          HorizontalAlignment="Left"
+                          VerticalAlignment="Center"
+                          Data="{StaticResource Icon.Search}"
+                          Stroke="{StaticResource Brush.Text.Muted}"
+                          IsHitTestVisible="False" />
+                    <TextBlock Style="{StaticResource Text.Caption}"
+                               Margin="33,0,10,0"
+                               VerticalAlignment="Center"
+                               Text="Search games"
+                               TextTrimming="CharacterEllipsis"
+                               IsHitTestVisible="False"
+                               Visibility="{Binding SearchText, Converter={StaticResource EmptyToVisible}}" />
+                </Grid>
+
+                <Rectangle Grid.Column="1" Style="{StaticResource Rule.Vertical}" Margin="12,4" />
+
+                <!-- filters -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <CheckBox Content="Games" IsChecked="{Binding ShowNormalGames}" />
+                    <CheckBox Content="Demos" Margin="14,0,0,0" IsChecked="{Binding ShowDemos}" />
+                    <CheckBox Content="Mods" Margin="14,0,0,0" IsChecked="{Binding ShowMods}" />
+                    <CheckBox Content="Junk" Margin="14,0,0,0" IsChecked="{Binding ShowJunk}" />
+                </StackPanel>
+
+                <!-- sort -->
+                <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0">
+                    <Path Style="{StaticResource Icon.Stroked}"
+                          Margin="0,0,8,0"
+                          VerticalAlignment="Center"
+                          Data="{StaticResource Icon.Sort}"
+                          Stroke="{StaticResource Brush.Text.Muted}" />
+                    <ToggleButton Style="{StaticResource Toggle.Segment}"
+                                  Content="A-Z"
+                                  IsChecked="{Binding SortOrder, Converter={StaticResource EnumToBool}, ConverterParameter=NameAscending}" />
+                    <ToggleButton Style="{StaticResource Toggle.Segment}"
+                                  Content="Z-A"
+                                  IsChecked="{Binding SortOrder, Converter={StaticResource EnumToBool}, ConverterParameter=NameDescending}" />
+                    <ToggleButton Style="{StaticResource Toggle.Segment}"
+                                  Content="App ID"
+                                  IsChecked="{Binding SortOrder, Converter={StaticResource EnumToBool}, ConverterParameter=AppId}" />
+                </StackPanel>
+
+                <!-- add / refresh -->
+                <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Grid Width="94">
+                        <TextBox x:Name="_AddGameBox"
+                                 ToolTip="Show a single app by id"
+                                 KeyDown="OnAddGameKeyDown" />
+                        <TextBlock Style="{StaticResource Text.Caption}"
+                                   Margin="10,0,0,0"
+                                   VerticalAlignment="Center"
+                                   Text="App ID"
+                                   IsHitTestVisible="False"
+                                   Visibility="{Binding Text, ElementName=_AddGameBox, Converter={StaticResource EmptyToVisible}}" />
+                    </Grid>
+                    <Button Margin="6,0,0,0"
+                            Padding="9,6"
+                            ToolTip="Show only this app id"
+                            Command="{Binding AddGameCommand}"
+                            CommandParameter="{Binding Text, ElementName=_AddGameBox}">
+                        <Path Style="{StaticResource Icon.Stroked}" Data="{StaticResource Icon.Plus}" />
+                    </Button>
+                    <Button Margin="10,0,0,0"
+                            Style="{StaticResource Button.Accent}"
+                            Command="{Binding RefreshCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Style="{StaticResource Icon.Stroked}"
+                                  Data="{StaticResource Icon.Refresh}"
+                                  Stroke="{StaticResource Brush.Text.OnAccent}" />
+                            <TextBlock Margin="7,0,0,0" Text="Refresh" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ============================ library ============================ -->
+
+        <Grid Grid.Row="1">
+            <ListBox x:Name="_GameList"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     Padding="8"
+                     ItemsSource="{Binding Games}"
+                     SelectedItem="{Binding SelectedGame}"
+                     ItemTemplate="{StaticResource GameCardTemplate}"
+                     ItemContainerStyle="{StaticResource GameCardContainer}"
+                     ScrollViewer.CanContentScroll="True"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.VirtualizationMode="Standard"
+                     KeyboardNavigation.DirectionalNavigation="Contained"
+                     MouseDoubleClick="OnGameActivated"
+                     KeyDown="OnGameListKeyDown">
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <controls:VirtualizingWrapPanel ItemWidth="248" ItemHeight="156" />
+                    </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+            </ListBox>
+
+            <!-- empty state -->
+            <StackPanel HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        IsHitTestVisible="False">
+                <StackPanel.Style>
+                    <Style TargetType="{x:Type StackPanel}">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding DisplayedCount}" Value="0" />
+                                    <Condition Binding="{Binding IsLoading}" Value="False" />
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Visibility" Value="Visible" />
+                            </MultiDataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </StackPanel.Style>
+                <Path Style="{StaticResource Icon.Stroked}"
+                      Width="42" Height="42"
+                      HorizontalAlignment="Center"
+                      Data="{StaticResource Icon.Empty}"
+                      Stroke="{StaticResource Brush.Text.Muted}"
+                      Opacity="0.6" />
+                <TextBlock Style="{StaticResource Text.Secondary}"
+                           Margin="0,14,0,0"
+                           HorizontalAlignment="Center"
+                           Text="Nothing to show" />
+                <TextBlock Style="{StaticResource Text.Caption}"
+                           Margin="0,4,0,0"
+                           HorizontalAlignment="Center"
+                           Text="Try a different search, or turn on more categories." />
+            </StackPanel>
+        </Grid>
+
+        <!-- ============================ status ============================ -->
+
+        <Border Grid.Row="2"
+                Background="{StaticResource Brush.Bg.Surface}"
+                BorderBrush="{StaticResource Brush.Border.Subtle}"
+                BorderThickness="0,1,0,0"
+                Padding="14,7">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <ProgressBar Grid.Column="0"
+                             Width="80" Height="4"
+                             Margin="0,0,10,0"
+                             VerticalAlignment="Center"
+                             IsIndeterminate="True"
+                             Style="{StaticResource Progress.Completion}"
+                             Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisible}}" />
+
+                <TextBlock Grid.Column="1"
+                           Style="{StaticResource Text.Secondary}"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Text="{Binding Status}" />
+
+                <Button Grid.Column="2"
+                        Style="{StaticResource Button.Ghost}"
+                        Command="{Binding LaunchCommand}"
+                        ToolTip="Open the selected game (Enter)">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Style="{StaticResource Icon.Filled}"
+                              Width="11" Height="11"
+                              Data="{StaticResource Icon.Play}"
+                              Fill="{StaticResource Brush.Accent}" />
+                        <TextBlock Margin="7,0,0,0" Text="Manage achievements" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </Border>
+    </Grid>
+</ui:ThemedWindow>

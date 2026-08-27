@@ -1,0 +1,108 @@
+﻿/* Copyright (c) 2024 Rick (rick 'at' gibbed 'dot' us)
+ *
+ * This software is provided 'as-is', without any express or implied
+ * warranty. In no event will the authors be held liable for any damages
+ * arising from the use of this software.
+ *
+ * Permission is granted to anyone to use this software for any purpose,
+ * including commercial applications, and to alter it and redistribute it
+ * freely, subject to the following restrictions:
+ *
+ * 1. The origin of this software must not be misrepresented; you must not
+ *    claim that you wrote the original software. If you use this software
+ *    in a product, an acknowledgment in the product documentation would
+ *    be appreciated but is not required.
+ *
+ * 2. Altered source versions must be plainly marked as such, and must not
+ *    be misrepresented as being the original software.
+ *
+ * 3. This notice may not be removed or altered from any source
+ *    distribution.
+ */
+
+using System;
+using SAM.API;
+using APICallbacks = SAM.API.Callbacks;
+using APITypes = SAM.API.Types;
+
+namespace SAM.Core.Steam
+{
+    /// <summary>
+    /// <see cref="ISteamStatsService"/> backed by a live Steam client pipe.
+    /// </summary>
+    public sealed class SteamStatsService : ISteamStatsService
+    {
+        private readonly Client _Client;
+        private readonly uint _AppId;
+        private readonly APICallbacks.UserStatsReceived _UserStatsReceivedCallback;
+
+        public SteamStatsService(Client client, uint appId)
+        {
+            this._Client = client ?? throw new ArgumentNullException(nameof(client));
+            this._AppId = appId;
+
+            this._UserStatsReceivedCallback = client.CreateAndRegisterCallback<APICallbacks.UserStatsReceived>();
+            this._UserStatsReceivedCallback.OnRun += this.OnUserStatsReceived;
+        }
+
+        public event Action<int> UserStatsReceived;
+
+        public uint AppId => this._AppId;
+
+        public string AppName => this._Client.SteamApps001.GetAppData(this._AppId, "name");
+
+        public string CurrentLanguage => this._Client.SteamApps008.GetCurrentGameLanguage();
+
+        public string InstallPath => API.Steam.GetInstallPath();
+
+        public bool RequestUserStats()
+        {
+            var steamId = this._Client.SteamUser.GetSteamId();
+
+            // This still triggers the UserStatsReceived callback, in addition to the
+            // callresult. No need to implement callresults for the time being.
+            return this._Client.SteamUserStats.RequestUserStats(steamId) != CallHandle.Invalid;
+        }
+
+        public void RunCallbacks() => this._Client.RunCallbacks(false);
+
+        public bool TryGetAchievement(string id, out bool isAchieved, out DateTime? unlockTime)
+        {
+            if (this._Client.SteamUserStats.GetAchievementAndUnlockTime(id, out isAchieved, out var raw) == false)
+            {
+                unlockTime = null;
+                return false;
+            }
+
+            unlockTime = isAchieved == true && raw > 0
+                ? DateTimeOffset.FromUnixTimeSeconds(raw).LocalDateTime
+                : null;
+            return true;
+        }
+
+        public bool SetAchievement(string id, bool isAchieved)
+            => this._Client.SteamUserStats.SetAchievement(id, isAchieved);
+
+        public bool TryGetIntegerStat(string id, out int value)
+            => this._Client.SteamUserStats.GetStatValue(id, out value);
+
+        public bool TryGetFloatStat(string id, out float value)
+            => this._Client.SteamUserStats.GetStatValue(id, out value);
+
+        public bool SetIntegerStat(string id, int value)
+            => this._Client.SteamUserStats.SetStatValue(id, value);
+
+        public bool SetFloatStat(string id, float value)
+            => this._Client.SteamUserStats.SetStatValue(id, value);
+
+        public bool StoreStats() => this._Client.SteamUserStats.StoreStats();
+
+        public bool ResetAllStats(bool includeAchievements)
+            => this._Client.SteamUserStats.ResetAllStats(includeAchievements);
+
+        private void OnUserStatsReceived(APITypes.UserStatsReceived param)
+        {
+            this.UserStatsReceived?.Invoke(param.Result);
+        }
+    }
+}
