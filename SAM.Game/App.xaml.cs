@@ -33,10 +33,13 @@ namespace SAM.Game
     public partial class App : Application
     {
         private API.Client _SteamClient;
+        private SteamStatsService _SteamStats;
 
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+
+            SAM.UI.CrashGuard.Install(this, "Steam Achievement Manager");
 
             if (e.Args.Length == 0)
             {
@@ -75,9 +78,9 @@ namespace SAM.Game
                 return;
             }
 
-            SteamStatsService steam = new(this._SteamClient, appId);
+            this._SteamStats = new(this._SteamClient, appId);
 
-            MainWindow window = new(steam);
+            MainWindow window = new(this._SteamStats);
             this.MainWindow = window;
             window.Show();
         }
@@ -85,6 +88,11 @@ namespace SAM.Game
         protected override void OnExit(ExitEventArgs e)
         {
             HttpDownloader.Shutdown();
+
+            // Unhook from the pipe before releasing it, so nothing is left registered to
+            // receive an event against a client that is going away.
+            this._SteamStats?.Dispose();
+            this._SteamStats = null;
 
             this._SteamClient?.Dispose();
             this._SteamClient = null;

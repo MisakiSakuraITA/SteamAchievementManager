@@ -32,10 +32,19 @@ namespace SAM.Core.Steam
     /// Every member here is expected to be called from that thread; the view models honour
     /// that by never touching a service from a background continuation.
     /// </remarks>
-    public interface ISteamLibraryService
+    public interface ISteamLibraryService : IDisposable
     {
         /// <summary>The language Steam is currently running games in, e.g. "english".</summary>
         string CurrentLanguage { get; }
+
+        /// <summary>
+        /// Whether Steam was still answering as of the last callback pump. Once this goes
+        /// false it stays false: the pipe cannot be re-established without restarting.
+        /// </summary>
+        bool IsConnected { get; }
+
+        /// <summary>Raised once when the Steam pipe stops answering.</summary>
+        event Action Disconnected;
 
         bool OwnsApp(uint appId);
 

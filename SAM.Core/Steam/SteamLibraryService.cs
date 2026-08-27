@@ -39,15 +39,23 @@ namespace SAM.Core.Steam
         private readonly Client _Client;
         private readonly APICallbacks.AppDataChanged _AppDataChangedCallback;
 
+        private bool _IsDisposed;
+
         public SteamLibraryService(Client client)
         {
             this._Client = client ?? throw new ArgumentNullException(nameof(client));
 
             this._AppDataChangedCallback = client.CreateAndRegisterCallback<APICallbacks.AppDataChanged>();
             this._AppDataChangedCallback.OnRun += this.OnAppDataChanged;
+
+            this._Client.Disconnected += this.OnDisconnected;
         }
 
         public event Action<uint> AppDataChanged;
+
+        public event Action Disconnected;
+
+        public bool IsConnected => this._IsDisposed == false && this._Client.IsConnected;
 
         public string CurrentLanguage => this._Client.SteamApps008.GetCurrentGameLanguage();
 
@@ -87,12 +95,40 @@ namespace SAM.Core.Steam
 
         private void OnAppDataChanged(APITypes.AppDataChanged param)
         {
-            if (param.Result == false)
+            if (this._IsDisposed == true || param.Result == false)
             {
                 return;
             }
 
             this.AppDataChanged?.Invoke(param.Id);
+        }
+
+        private void OnDisconnected()
+        {
+            if (this._IsDisposed == true)
+            {
+                return;
+            }
+
+            this.Disconnected?.Invoke();
+        }
+
+        /// <summary>
+        /// Unhooks from the Steam pipe. After this the callback is no longer registered, so a
+        /// closed window can never be reached by an incoming IPC event.
+        /// </summary>
+        public void Dispose()
+        {
+            if (this._IsDisposed == true)
+            {
+                return;
+            }
+
+            this._IsDisposed = true;
+
+            this._AppDataChangedCallback.OnRun -= this.OnAppDataChanged;
+            this._Client.Disconnected -= this.OnDisconnected;
+            this._Client.UnregisterCallback(this._AppDataChangedCallback);
         }
     }
 }

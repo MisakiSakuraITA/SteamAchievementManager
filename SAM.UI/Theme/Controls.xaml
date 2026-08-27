@@ -645,6 +645,25 @@
         </Setter>
     </Style>
 
+    <!-- ============================ alert banner ============================ -->
+
+    <!-- A persistent, non-modal strip for a condition the user has to act on. Deliberately
+         not a dialog: the state outlives any one acknowledgement. -->
+    <Style x:Key="Banner.Danger" TargetType="{x:Type Border}">
+        <Setter Property="Background" Value="{StaticResource Brush.Bg.Elevated}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Brush.Danger}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="Padding" Value="14,9" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+    </Style>
+
+    <Style x:Key="Text.Banner" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Text.Body}">
+        <Setter Property="Foreground" Value="{StaticResource Brush.Danger}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
     <!-- ============================ separators ============================ -->
 
     <Style x:Key="Rule.Vertical" TargetType="{x:Type Rectangle}">

@@ -57,6 +57,10 @@ namespace SAM.Core.ViewModels
         private string _Status = "Retrieving stat information...";
         private bool _IsBusy = true;
         private bool _AllowStatEditing;
+        private bool _IsSteamConnected = true;
+
+        internal const string _DisconnectedMessage =
+            "Steam is no longer running. Please launch Steam and restart the application.";
 
         public AchievementManagerViewModel(ISteamStatsService steam)
         {
@@ -69,15 +73,24 @@ namespace SAM.Core.ViewModels
             this.Achievements = new();
             this.Statistics = new();
 
-            this.ReloadCommand = new(this.ReloadAsync, () => this._IsBusy == false);
-            this.StoreCommand = new(this.StoreAsync, () => this._IsBusy == false && this.IsModified == true);
-            this.UnlockAllCommand = new(() => this.SetAll(true), () => this._IsBusy == false);
-            this.LockAllCommand = new(() => this.SetAll(false), () => this._IsBusy == false);
-            this.InvertAllCommand = new(this.InvertAll, () => this._IsBusy == false);
-            this.ResetAllCommand = new(this.ResetAll, () => this._IsBusy == false);
+            this._IsSteamConnected = steam.IsConnected;
+
+            this.ReloadCommand = new(this.ReloadAsync, this.CanReachSteam);
+            this.StoreCommand = new(this.StoreAsync, () => this.CanReachSteam() && this.IsModified == true);
+            this.UnlockAllCommand = new(() => this.SetAll(true), this.CanReachSteam);
+            this.LockAllCommand = new(() => this.SetAll(false), this.CanReachSteam);
+            this.InvertAllCommand = new(this.InvertAll, this.CanReachSteam);
+            this.ResetAllCommand = new(this.ResetAll, this.CanReachSteam);
 
             this._Steam.UserStatsReceived += this.OnUserStatsReceived;
+            this._Steam.Disconnected += this.OnSteamDisconnected;
         }
+
+        /// <summary>
+        /// Every command here ends in a write to the Steam pipe, so they all share one gate:
+        /// not already busy, and still connected.
+        /// </summary>
+        private bool CanReachSteam() => this._IsBusy == false && this._IsSteamConnected == true;
 
         public ObservableCollection<AchievementViewModel> Achievements { get; }
 
@@ -187,6 +200,30 @@ namespace SAM.Core.ViewModels
 
         public bool HasValidationErrors => this._AllStatistics.Any(s => s.HasError);
 
+        /// <summary>
+        /// False once Steam has gone away. Every command that reaches the pipe is gated on
+        /// this, so nothing is written to a dead connection.
+        /// </summary>
+        public bool IsSteamConnected
+        {
+            get => this._IsSteamConnected;
+            private set
+            {
+                if (this.Set(ref this._IsSteamConnected, value) == false)
+                {
+                    return;
+                }
+
+                this.Raise(nameof(this.IsSteamDisconnected));
+                this.RaiseCommandStates();
+            }
+        }
+
+        /// <summary>Convenience inverse, so the banner can bind without a converter.</summary>
+        public bool IsSteamDisconnected => this._IsSteamConnected == false;
+
+        public string DisconnectedMessage => _DisconnectedMessage;
+
         /// <summary>Asks Steam for the current stats. The reply arrives on a callback.</summary>
         public void BeginLoad()
         {
@@ -206,9 +243,17 @@ namespace SAM.Core.ViewModels
             this._Steam.RunCallbacks();
         }
 
+        private void OnSteamDisconnected()
+        {
+            this.IsSteamConnected = false;
+            this.IsBusy = false;
+            this.Status = _DisconnectedMessage;
+        }
+
         public void Shutdown()
         {
             this._Steam.UserStatsReceived -= this.OnUserStatsReceived;
+            this._Steam.Disconnected -= this.OnSteamDisconnected;
 
             // Cancel, but do not dispose: loads that are still unwinding keep observing the
             // token, and tearing it down here would only trade cancellation for a fault.

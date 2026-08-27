@@ -108,13 +108,30 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- ============================ toolbar ============================ -->
+        <!-- ============================ steam disconnected ============================ -->
 
         <Border Grid.Row="0"
+                Style="{StaticResource Banner.Danger}"
+                Visibility="{Binding IsSteamDisconnected, Converter={StaticResource BoolToVisible}}">
+            <StackPanel Orientation="Horizontal">
+                <Path Style="{StaticResource Icon.Stroked}"
+                      VerticalAlignment="Center"
+                      Data="{StaticResource Icon.Warning}"
+                      Stroke="{StaticResource Brush.Danger}" />
+                <TextBlock Style="{StaticResource Text.Banner}"
+                           Margin="10,0,0,0"
+                           Text="{Binding DisconnectedMessage}" />
+            </StackPanel>
+        </Border>
+
+        <!-- ============================ toolbar ============================ -->
+
+        <Border Grid.Row="1"
                 Background="{StaticResource Brush.Bg.Surface}"
                 BorderBrush="{StaticResource Brush.Border.Subtle}"
                 BorderThickness="0,0,0,1"
@@ -214,7 +231,7 @@
 
         <!-- ============================ library ============================ -->
 
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="2">
             <ListBox x:Name="_GameList"
                      Background="Transparent"
                      BorderThickness="0"
@@ -275,7 +292,7 @@
 
         <!-- ============================ status ============================ -->
 
-        <Border Grid.Row="2"
+        <Border Grid.Row="3"
                 Background="{StaticResource Brush.Bg.Surface}"
                 BorderBrush="{StaticResource Brush.Border.Subtle}"
                 BorderThickness="0,1,0,0"

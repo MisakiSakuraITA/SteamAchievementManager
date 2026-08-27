@@ -69,6 +69,10 @@ namespace SAM.Core.ViewModels
         private GameViewModel _SelectedGame;
         private string _Status = "Ready.";
         private bool _IsLoading;
+        private bool _IsSteamConnected = true;
+
+        internal const string _DisconnectedMessage =
+            "Steam is no longer running. Please launch Steam and restart the application.";
 
         public GameLibraryViewModel(ISteamLibraryService steam)
             : this(steam, GameCatalog.LoadAsync)
@@ -91,11 +95,16 @@ namespace SAM.Core.ViewModels
 
             this.Games = new();
 
-            this.RefreshCommand = new(this.LoadAsync, () => this._IsLoading == false);
-            this.AddGameCommand = new(this.AddGameById, _ => this._IsLoading == false);
-            this.LaunchCommand = new(this.OnLaunchRequested, _ => this._SelectedGame != null);
+            this._IsSteamConnected = steam.IsConnected;
+
+            this.RefreshCommand = new(this.LoadAsync, () => this._IsLoading == false && this._IsSteamConnected == true);
+            this.AddGameCommand = new(this.AddGameById, _ => this._IsLoading == false && this._IsSteamConnected == true);
+            this.LaunchCommand = new(
+                this.OnLaunchRequested,
+                _ => this._SelectedGame != null && this._IsSteamConnected == true);
 
             this._Steam.AppDataChanged += this.OnAppDataChanged;
+            this._Steam.Disconnected += this.OnSteamDisconnected;
         }
 
         /// <summary>The filtered, sorted games the view binds to.</summary>
@@ -116,6 +125,32 @@ namespace SAM.Core.ViewModels
         public int TotalCount => this._AllGames.Count;
 
         public int DisplayedCount => this.Games.Count;
+
+        /// <summary>
+        /// False once Steam has gone away. Every command that reaches the pipe is gated on
+        /// this, so nothing is attempted against a dead connection.
+        /// </summary>
+        public bool IsSteamConnected
+        {
+            get => this._IsSteamConnected;
+            private set
+            {
+                if (this.Set(ref this._IsSteamConnected, value) == false)
+                {
+                    return;
+                }
+
+                this.Raise(nameof(this.IsSteamDisconnected));
+                this.RefreshCommand.RaiseCanExecuteChanged();
+                this.AddGameCommand.RaiseCanExecuteChanged();
+                this.LaunchCommand.RaiseCanExecuteChanged();
+            }
+        }
+
+        /// <summary>Convenience inverse, so the banner can bind without a converter.</summary>
+        public bool IsSteamDisconnected => this._IsSteamConnected == false;
+
+        public string DisconnectedMessage => _DisconnectedMessage;
 
         public string SearchText
         {
@@ -321,9 +356,16 @@ namespace SAM.Core.ViewModels
             this._Steam.RunCallbacks();
         }
 
+        private void OnSteamDisconnected()
+        {
+            this.IsSteamConnected = false;
+            this.Status = _DisconnectedMessage;
+        }
+
         public void Shutdown()
         {
             this._Steam.AppDataChanged -= this.OnAppDataChanged;
+            this._Steam.Disconnected -= this.OnSteamDisconnected;
 
             // Cancel, but do not dispose: loads that are still unwinding keep observing the
             // token, and tearing it down here would only trade cancellation for a fault.
@@ -441,6 +483,13 @@ namespace SAM.Core.ViewModels
 
         private void UpdateIdleStatus()
         {
+            if (this._IsSteamConnected == false)
+            {
+                // A lost connection outranks any count; filtering must not overwrite it.
+                this.Status = _DisconnectedMessage;
+                return;
+            }
+
             this.Status = this._AllGames.Count == 0
                 ? "No games found."
                 : _($"Showing {this.Games.Count:N0} of {this._AllGames.Count:N0} games.");

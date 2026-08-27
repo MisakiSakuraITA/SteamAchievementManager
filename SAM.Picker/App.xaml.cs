@@ -31,10 +31,13 @@ namespace SAM.Picker
     public partial class App : Application
     {
         private API.Client _SteamClient;
+        private SteamLibraryService _SteamLibrary;
 
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+
+            SAM.UI.CrashGuard.Install(this, "Steam Achievement Manager");
 
             if (IsRunningFromSteamDirectory() == true)
             {
@@ -60,9 +63,9 @@ namespace SAM.Picker
                 return;
             }
 
-            SteamLibraryService steam = new(this._SteamClient);
+            this._SteamLibrary = new(this._SteamClient);
 
-            MainWindow window = new(steam);
+            MainWindow window = new(this._SteamLibrary);
             this.MainWindow = window;
             window.Show();
         }
@@ -70,6 +73,11 @@ namespace SAM.Picker
         protected override void OnExit(ExitEventArgs e)
         {
             HttpDownloader.Shutdown();
+
+            // Unhook from the pipe before releasing it, so nothing is left registered to
+            // receive an event against a client that is going away.
+            this._SteamLibrary?.Dispose();
+            this._SteamLibrary = null;
 
             this._SteamClient?.Dispose();
             this._SteamClient = null;

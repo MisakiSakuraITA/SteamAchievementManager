@@ -31,9 +31,18 @@ namespace SAM.Core.Steam
     /// As with <see cref="ISteamLibraryService"/>, every member belongs to the thread that
     /// opened the Steam pipe.
     /// </remarks>
-    public interface ISteamStatsService
+    public interface ISteamStatsService : IDisposable
     {
         uint AppId { get; }
+
+        /// <summary>
+        /// Whether Steam was still answering as of the last callback pump. Once this goes
+        /// false it stays false: the pipe cannot be re-established without restarting.
+        /// </summary>
+        bool IsConnected { get; }
+
+        /// <summary>Raised once when the Steam pipe stops answering.</summary>
+        event Action Disconnected;
 
         string AppName { get; }
 

@@ -36,6 +36,8 @@ namespace SAM.Core.Steam
         private readonly uint _AppId;
         private readonly APICallbacks.UserStatsReceived _UserStatsReceivedCallback;
 
+        private bool _IsDisposed;
+
         public SteamStatsService(Client client, uint appId)
         {
             this._Client = client ?? throw new ArgumentNullException(nameof(client));
@@ -43,9 +45,15 @@ namespace SAM.Core.Steam
 
             this._UserStatsReceivedCallback = client.CreateAndRegisterCallback<APICallbacks.UserStatsReceived>();
             this._UserStatsReceivedCallback.OnRun += this.OnUserStatsReceived;
+
+            this._Client.Disconnected += this.OnDisconnected;
         }
 
         public event Action<int> UserStatsReceived;
+
+        public event Action Disconnected;
+
+        public bool IsConnected => this._IsDisposed == false && this._Client.IsConnected;
 
         public uint AppId => this._AppId;
 
@@ -102,7 +110,40 @@ namespace SAM.Core.Steam
 
         private void OnUserStatsReceived(APITypes.UserStatsReceived param)
         {
+            if (this._IsDisposed == true)
+            {
+                return;
+            }
+
             this.UserStatsReceived?.Invoke(param.Result);
+        }
+
+        private void OnDisconnected()
+        {
+            if (this._IsDisposed == true)
+            {
+                return;
+            }
+
+            this.Disconnected?.Invoke();
+        }
+
+        /// <summary>
+        /// Unhooks from the Steam pipe. After this the callback is no longer registered, so a
+        /// closed window can never be reached by an incoming IPC event.
+        /// </summary>
+        public void Dispose()
+        {
+            if (this._IsDisposed == true)
+            {
+                return;
+            }
+
+            this._IsDisposed = true;
+
+            this._UserStatsReceivedCallback.OnRun -= this.OnUserStatsReceived;
+            this._Client.Disconnected -= this.OnDisconnected;
+            this._Client.UnregisterCallback(this._UserStatsReceivedCallback);
         }
     }
 }

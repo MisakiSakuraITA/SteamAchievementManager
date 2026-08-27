@@ -36,7 +36,10 @@ namespace SAM.API
 
         public void Run(IntPtr param)
         {
-            this.OnRun(param);
+            // A registered callback with no live subscriber is normal during shutdown, once
+            // the owning view has unhooked. Dispatching to nothing must not throw back into
+            // the pump.
+            this.OnRun?.Invoke(param);
         }
     }
 
@@ -52,8 +55,15 @@ namespace SAM.API
 
         public void Run(IntPtr pvParam)
         {
+            var handler = this.OnRun;
+            if (handler == null)
+            {
+                // Nothing is listening any more; skip the marshalling too.
+                return;
+            }
+
             var data = (TParameter)Marshal.PtrToStructure(pvParam, typeof(TParameter));
-            this.OnRun(data);
+            handler(data);
         }
     }
 }

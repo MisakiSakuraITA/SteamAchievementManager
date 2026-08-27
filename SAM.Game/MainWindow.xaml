@@ -124,8 +124,19 @@
                     <CheckBox Grid.Column="2"
                               VerticalAlignment="Top"
                               IsChecked="{Binding IsUnlocked, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                              IsEnabled="{Binding IsProtected, Converter={StaticResource Not}}"
-                              ToolTip="Unlock this achievement on the next store" />
+                              ToolTip="Unlock this achievement on the next store">
+                        <CheckBox.Style>
+                            <Style TargetType="{x:Type CheckBox}" BasedOn="{StaticResource {x:Type CheckBox}}">
+                                <Setter Property="IsEnabled" Value="{Binding IsProtected, Converter={StaticResource Not}}" />
+                                <Style.Triggers>
+                                    <!-- Nothing can be staged once the pipe is gone. -->
+                                    <DataTrigger Binding="{Binding DataContext.IsSteamDisconnected, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                        <Setter Property="IsEnabled" Value="False" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </CheckBox.Style>
+                    </CheckBox>
                 </Grid>
             </Border>
         </DataTemplate>
@@ -192,6 +203,10 @@
                                     <DataTrigger Binding="{Binding IsProtected}" Value="True">
                                         <Setter Property="IsEnabled" Value="False" />
                                     </DataTrigger>
+                                    <!-- Nothing can be staged once the pipe is gone. -->
+                                    <DataTrigger Binding="{Binding DataContext.IsSteamDisconnected, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                        <Setter Property="IsEnabled" Value="False" />
+                                    </DataTrigger>
                                     <DataTrigger Binding="{Binding HasError}" Value="True">
                                         <Setter Property="BorderBrush" Value="{StaticResource Brush.Danger}" />
                                     </DataTrigger>
@@ -210,13 +225,30 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- ============================ header ============================ -->
+        <!-- ============================ steam disconnected ============================ -->
 
         <Border Grid.Row="0"
+                Style="{StaticResource Banner.Danger}"
+                Visibility="{Binding IsSteamDisconnected, Converter={StaticResource BoolToVisible}}">
+            <StackPanel Orientation="Horizontal">
+                <Path Style="{StaticResource Icon.Stroked}"
+                      VerticalAlignment="Center"
+                      Data="{StaticResource Icon.Warning}"
+                      Stroke="{StaticResource Brush.Danger}" />
+                <TextBlock Style="{StaticResource Text.Banner}"
+                           Margin="10,0,0,0"
+                           Text="{Binding DisconnectedMessage}" />
+            </StackPanel>
+        </Border>
+
+        <!-- ============================ header ============================ -->
+
+        <Border Grid.Row="1"
                 Background="{StaticResource Brush.Bg.Surface}"
                 Padding="18,14,18,12">
             <Grid>
@@ -259,7 +291,7 @@
 
         <!-- ============================ tabs ============================ -->
 
-        <TabControl Grid.Row="1">
+        <TabControl Grid.Row="2">
             <TabItem Header="Achievements">
                 <Grid>
                     <Grid.RowDefinitions>
@@ -392,7 +424,7 @@
 
         <!-- ============================ status ============================ -->
 
-        <Border Grid.Row="2"
+        <Border Grid.Row="3"
                 Background="{StaticResource Brush.Bg.Surface}"
                 BorderBrush="{StaticResource Brush.Border.Subtle}"
                 BorderThickness="0,1,0,0"

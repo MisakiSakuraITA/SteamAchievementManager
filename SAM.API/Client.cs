@@ -89,6 +89,21 @@ namespace SAM.API
             this.SteamApps008 = this.SteamClient.GetSteamApps008(this._User, this._Pipe);
         }
 
+        /// <summary>
+        /// Raised once, on the thread running the callback pump, when the Steam pipe stops
+        /// answering. Steam has to be restarted before this client is usable again.
+        /// </summary>
+        public event Action Disconnected;
+
+        /// <summary>
+        /// Raised when a callback subscriber threw. The pump keeps running regardless; this
+        /// exists so the shell can surface a fault that would otherwise be invisible.
+        /// </summary>
+        public event Action<Exception> CallbackFaulted;
+
+        /// <summary>Whether the Steam pipe was still answering as of the last pump.</summary>
+        public bool IsConnected => this._IsConnected;
+
         ~Client()
         {
             this.Dispose(false);
@@ -101,6 +116,19 @@ namespace SAM.API
                 return;
             }
 
+            this._IsDisposed = true;
+
+            // Everything below reaches into steamclient.dll, and the pipe belongs to the
+            // thread that opened it. On the finalizer path there is no safe way to honour
+            // that affinity, so the pipe is deliberately left for process teardown to
+            // reclaim rather than released from the wrong thread.
+            if (disposing == false)
+            {
+                return;
+            }
+
+            this.UnregisterAllCallbacks();
+
             if (this.SteamClient != null && this._Pipe > 0)
             {
                 if (this._User > 0)
@@ -112,8 +140,6 @@ namespace SAM.API
                 this.SteamClient.ReleaseSteamPipe(this._Pipe);
                 this._Pipe = 0;
             }
-
-            this._IsDisposed = true;
         }
 
         public void Dispose()
@@ -126,35 +152,155 @@ namespace SAM.API
             where TCallback : ICallback, new()
         {
             TCallback callback = new();
-            this._Callbacks.Add(callback);
+            lock (this._CallbackLock)
+            {
+                this._Callbacks.Add(callback);
+            }
             return callback;
         }
 
+        /// <summary>
+        /// Stops dispatching to a callback. Safe to call while the pump is running, and safe
+        /// to call more than once.
+        /// </summary>
+        public void UnregisterCallback(ICallback callback)
+        {
+            if (callback == null)
+            {
+                return;
+            }
+
+            lock (this._CallbackLock)
+            {
+                this._Callbacks.Remove(callback);
+            }
+        }
+
+        public void UnregisterAllCallbacks()
+        {
+            lock (this._CallbackLock)
+            {
+                this._Callbacks.Clear();
+            }
+        }
+
+        private readonly object _CallbackLock = new();
+
         private bool _RunningCallbacks;
+        private bool _IsConnected = true;
 
         public void RunCallbacks(bool server)
         {
-            if (this._RunningCallbacks == true)
+            if (this._IsDisposed == true || this._RunningCallbacks == true)
             {
                 return;
             }
 
             this._RunningCallbacks = true;
-
-            Types.CallbackMessage message;
-            while (Steam.GetCallback(this._Pipe, out message, out _) == true)
+            try
             {
-                var callbackId = message.Id;
-                foreach (ICallback callback in this._Callbacks.Where(
-                    candidate => candidate.Id == callbackId &&
-                                 candidate.IsServer == server))
+                Types.CallbackMessage message;
+                while (Steam.GetCallback(this._Pipe, out message, out _) == true)
+                {
+                    try
+                    {
+                        this.Dispatch(message, server);
+                    }
+                    finally
+                    {
+                        // The native queue entry has to be released whatever the subscribers
+                        // did, or the pipe backs up behind an entry that is never freed.
+                        Steam.FreeLastCallback(this._Pipe);
+                    }
+                }
+            }
+            finally
+            {
+                // Guaranteed, so one throw can never wedge the pump into a state where every
+                // later tick returns at the re-entrancy guard and Steam goes quiet forever.
+                this._RunningCallbacks = false;
+            }
+
+            this.CheckConnection();
+        }
+
+        private void Dispatch(Types.CallbackMessage message, bool server)
+        {
+            var callbackId = message.Id;
+
+            // Snapshot: a subscriber is allowed to register or unregister callbacks while it
+            // is being dispatched to, which would otherwise invalidate the enumerator.
+            ICallback[] targets;
+            lock (this._CallbackLock)
+            {
+                targets = this._Callbacks
+                    .Where(candidate => candidate.Id == callbackId && candidate.IsServer == server)
+                    .ToArray();
+            }
+
+            foreach (var callback in targets)
+            {
+                try
                 {
                     callback.Run(message.ParamPointer);
                 }
-                Steam.FreeLastCallback(this._Pipe);
+                catch (Exception e)
+                {
+                    // One bad subscriber must not cost the others their callback, leak the
+                    // native queue entry, or take down the process.
+                    this.RaiseCallbackFaulted(e);
+                }
+            }
+        }
+
+        private void RaiseCallbackFaulted(Exception exception)
+        {
+            try
+            {
+                this.CallbackFaulted?.Invoke(exception);
+            }
+            catch (Exception)
+            {
+                // The fault reporter itself is not allowed to break the pump.
+            }
+        }
+
+        /// <summary>
+        /// Asks Steam which universe the pipe is connected to. A dead pipe reports the invalid
+        /// universe, which is the cheapest reliable signal that the client has gone away.
+        /// </summary>
+        private void CheckConnection()
+        {
+            if (this._IsConnected == false || this._IsDisposed == true)
+            {
+                return;
             }
 
-            this._RunningCallbacks = false;
+            bool alive;
+            try
+            {
+                alive = this.SteamUtils != null && this.SteamUtils.GetConnectedUniverse() != 0;
+            }
+            catch (Exception)
+            {
+                alive = false;
+            }
+
+            if (alive == true)
+            {
+                return;
+            }
+
+            this._IsConnected = false;
+
+            try
+            {
+                this.Disconnected?.Invoke();
+            }
+            catch (Exception)
+            {
+                // Reporting the disconnect must not itself throw out of the timer tick.
+            }
         }
     }
 }
