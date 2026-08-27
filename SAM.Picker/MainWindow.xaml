@@ -6,6 +6,7 @@
                  xmlns:conv="clr-namespace:SAM.UI.Converters;assembly=SAM.UI"
                  xmlns:vm="clr-namespace:SAM.Core.ViewModels;assembly=SAM.Core"
                  Title="Steam Achievement Manager"
+                 Icon="pack://application:,,,/SAM.Picker;component/SAM.ico"
                  Width="1080" Height="720"
                  MinWidth="640" MinHeight="420"
                  WindowStartupLocation="CenterScreen">
@@ -38,7 +39,7 @@
                               HorizontalAlignment="Center"
                               VerticalAlignment="Center" />
 
-                        <controls:CachedImage Cache="{Binding DataContext.Capsules, RelativeSource={RelativeSource AncestorType=Window}}"
+                        <controls:CachedImage Cache="{Binding Capsules, RelativeSource={RelativeSource AncestorType=Window}}"
                                               CacheIdentity="{Binding CapsuleIdentity}"
                                               SourceUri="{Binding CapsuleUri}"
                                               DecodeWidth="228"

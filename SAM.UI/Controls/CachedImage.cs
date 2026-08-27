@@ -1,4 +1,4 @@
-﻿/* Copyright (c) 2024 Rick (rick 'at' gibbed 'dot' us)
+/* Copyright (c) 2024 Rick (rick 'at' gibbed 'dot' us)
  *
  * This software is provided 'as-is', without any express or implied
  * warranty. In no event will the authors be held liable for any damages
@@ -166,7 +166,37 @@ namespace SAM.UI.Controls
                 return;
             }
 
-            if (generation != this._Generation || resolved == null)
+            if (resolved == null)
+            {
+                return;
+            }
+
+            // ConfigureAwait(true) is expected to resume this continuation on the thread that
+            // owns this element, but it does not always land there: when several containers
+            // race for the same identity, AssetCache hands every caller the same in-flight
+            // task, and a task that is already completing by the time a later caller reaches
+            // its own await can run that caller's continuation inline, synchronously, on
+            // whatever thread happens to be finishing the earlier one -- a thread-pool thread,
+            // not this element's dispatcher thread. Touching a DependencyProperty from there
+            // throws, and since this method is fire-and-forgotten, that throw would otherwise
+            // vanish silently, permanently stuck on the placeholder. Route explicitly instead
+            // of trusting the capture held.
+            if (this.CheckAccess() == false)
+            {
+                // Deliberately not awaited: the marshalled continuation completes on its own,
+                // and there is nothing left in this method for it to hand back into.
+                _ = this.Dispatcher.BeginInvoke(new Action(() => this.ApplyIfCurrent(resolved, generation)));
+                return;
+            }
+
+            this.ApplyIfCurrent(resolved, generation);
+        }
+
+        private void ApplyIfCurrent(ImageSource resolved, int generation)
+        {
+            // Re-checked on the dispatcher thread rather than before the marshal, so a Refresh
+            // that ran while this was queued is not missed.
+            if (generation != this._Generation)
             {
                 return;
             }

@@ -38,6 +38,11 @@
     <OutputPath>..\upload\</OutputPath>
   </PropertyGroup>
   <ItemGroup>
+    <!-- ApplicationIcon (above) only sets the Win32 resource Explorer and shortcuts read.
+         Window.Icon at runtime needs the file embedded as a pack resource too. -->
+    <Resource Include="SAM.ico" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\SAM.API\SAM.API.csproj" />
     <ProjectReference Include="..\SAM.Core\SAM.Core.csproj" />
     <ProjectReference Include="..\SAM.UI\SAM.UI.csproj" />

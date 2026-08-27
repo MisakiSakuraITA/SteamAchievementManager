@@ -6,6 +6,7 @@
                  xmlns:conv="clr-namespace:SAM.UI.Converters;assembly=SAM.UI"
                  xmlns:vm="clr-namespace:SAM.Core.ViewModels;assembly=SAM.Core"
                  Title="Steam Achievement Manager"
+                 Icon="pack://application:,,,/SAM.Game;component/SAM.ico"
                  Width="1120" Height="760"
                  MinWidth="720" MinHeight="480"
                  WindowStartupLocation="CenterScreen">
@@ -63,7 +64,7 @@
                                   Data="{StaticResource Icon.Lock}"
                                   Stroke="{StaticResource Brush.Text.Muted}"
                                   Opacity="0.5" />
-                            <controls:CachedImage Cache="{Binding DataContext.Icons, RelativeSource={RelativeSource AncestorType=Window}}"
+                            <controls:CachedImage Cache="{Binding Icons, RelativeSource={RelativeSource AncestorType=Window}}"
                                                   CacheIdentity="{Binding IconIdentity}"
                                                   SourceUri="{Binding IconUri}"
                                                   DecodeWidth="56"

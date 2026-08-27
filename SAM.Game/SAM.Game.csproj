@@ -12,7 +12,7 @@
     <FileVersion>7.0.0.0</FileVersion>
   </PropertyGroup>
   <PropertyGroup>
-    <ApplicationIcon>Blank.ico</ApplicationIcon>
+    <ApplicationIcon>SAM.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <PropertyGroup>
@@ -37,6 +37,11 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
     <OutputPath>..\upload\</OutputPath>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- ApplicationIcon (above) only sets the Win32 resource Explorer and shortcuts read.
+         Window.Icon at runtime needs the file embedded as a pack resource too. -->
+    <Resource Include="SAM.ico" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\SAM.API\SAM.API.csproj" />
     <ProjectReference Include="..\SAM.Core\SAM.Core.csproj" />
