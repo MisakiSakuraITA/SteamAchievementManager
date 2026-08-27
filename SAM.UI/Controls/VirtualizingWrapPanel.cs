@@ -42,8 +42,7 @@ namespace SAM.UI.Controls
     /// </remarks>
     public class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
     {
-        private const double _ScrollLineDelta = 16.0;
-        private const double _MouseWheelDelta = 48.0;
+        private const double _ScrollLineDelta = 32.0;
 
         public static readonly DependencyProperty ItemWidthProperty = DependencyProperty.Register(
             nameof(ItemWidth),
@@ -138,13 +137,30 @@ namespace SAM.UI.Controls
 
         public void PageRight() => this.SetHorizontalOffset(this._Offset.X + this._Viewport.Width);
 
-        public void MouseWheelUp() => this.SetVerticalOffset(this._Offset.Y - _MouseWheelDelta);
+        public void MouseWheelUp() => this.SetVerticalOffset(this._Offset.Y - this.MouseWheelDelta);
 
-        public void MouseWheelDown() => this.SetVerticalOffset(this._Offset.Y + _MouseWheelDelta);
+        public void MouseWheelDown() => this.SetVerticalOffset(this._Offset.Y + this.MouseWheelDelta);
 
-        public void MouseWheelLeft() => this.SetHorizontalOffset(this._Offset.X - _MouseWheelDelta);
+        public void MouseWheelLeft() => this.SetHorizontalOffset(this._Offset.X - this.MouseWheelDelta);
 
-        public void MouseWheelRight() => this.SetHorizontalOffset(this._Offset.X + _MouseWheelDelta);
+        public void MouseWheelRight() => this.SetHorizontalOffset(this._Offset.X + this.MouseWheelDelta);
+
+        /// <summary>
+        /// How far one wheel notch travels, honouring the user's system setting rather than a
+        /// hard-coded step. A negative setting means "one screen per notch".
+        /// </summary>
+        private double MouseWheelDelta
+        {
+            get
+            {
+                var lines = SystemParameters.WheelScrollLines;
+                if (lines < 0)
+                {
+                    return Math.Max(_ScrollLineDelta, this._Viewport.Height);
+                }
+                return Math.Max(_ScrollLineDelta, lines * _ScrollLineDelta);
+            }
+        }
 
         public void SetHorizontalOffset(double offset)
         {
@@ -153,6 +169,7 @@ namespace SAM.UI.Controls
             {
                 this._Offset.X = 0;
                 this.InvalidateMeasure();
+                this.ScrollOwner?.InvalidateScrollInfo();
             }
         }
 
@@ -166,6 +183,12 @@ namespace SAM.UI.Controls
 
             this._Offset.Y = clamped;
             this.InvalidateMeasure();
+
+            // IScrollInfo requires the owner to be told whenever the offset moves. Without
+            // this the ScrollViewer keeps serving its own stale VerticalOffset, so the
+            // scrollbar thumb never follows the content and anything reading the viewer's
+            // offset sees a value that is simply wrong.
+            this.ScrollOwner?.InvalidateScrollInfo();
         }
 
         /// <summary>
@@ -291,9 +314,13 @@ namespace SAM.UI.Controls
                 {
                     this.RemoveInternalChildRange(0, this.InternalChildren.Count);
 
-                    // A reset usually means the list was refiltered; showing the middle of a
-                    // list the user has not seen yet would be disorienting.
-                    this._Offset.Y = 0;
+                    // The scroll position is deliberately kept. A Reset here is far more often
+                    // a background refresh rebuilding the same list -- Steam re-delivering
+                    // user stats, or app data arriving late -- than a genuine change of
+                    // content, and throwing the user back to the top mid-scroll on every
+                    // refresh reads as "scrolling does not work". If the list shrank, the
+                    // clamp in UpdateScrollInfo pulls the offset back into range on the next
+                    // measure.
                     this.ScrollOwner?.InvalidateScrollInfo();
                     break;
                 }
