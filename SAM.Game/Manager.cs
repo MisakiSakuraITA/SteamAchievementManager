@@ -27,21 +27,33 @@ using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
-using static SAM.Game.InvariantShorthand;
+using SAM.Core.Caching;
+using SAM.Core.Threading;
+using SAM.Core.WinForms;
+using static SAM.Core.InvariantShorthand;
 using APITypes = SAM.API.Types;
 
 namespace SAM.Game
 {
     internal partial class Manager : Form
     {
+        private const int _MaximumConcurrentIconLoads = 6;
+
+        private static readonly TimeSpan _CacheRetention = TimeSpan.FromDays(90);
+
         private readonly long _GameId;
         private readonly API.Client _SteamClient;
 
-        private readonly WebClient _IconDownloader = new();
+        private readonly Queue<Stats.AchievementInfo> _IconQueue = new();
+        private readonly ImageCache _IconCache;
+        private readonly ImageListCache _AchievementImages;
 
-        private readonly List<Stats.AchievementInfo> _IconQueue = new();
+        private readonly CancellationTokenSource _Shutdown = new();
+        private readonly CancellationToken _ShutdownToken;
+
         private readonly List<Stats.StatDefinition> _StatDefinitions = new();
 
         private readonly List<Stats.AchievementDefinition> _AchievementDefinitions = new();
@@ -50,16 +62,26 @@ namespace SAM.Game
 
         private readonly API.Callbacks.UserStatsReceived _UserStatsReceivedCallback;
 
+        private bool _IsPumpingIcons;
+
         //private API.Callback<APITypes.UserStatsStored> UserStatsStoredCallback;
 
         public Manager(long gameId, API.Client client)
         {
+            this._ShutdownToken = this._Shutdown.Token;
+
             this.InitializeComponent();
 
             this._MainTabControl.SelectedTab = this._AchievementsTabPage;
             //this.statisticsList.Enabled = this.checkBox1.Checked;
 
-            this._AchievementImageList.Images.Add("Blank", new Bitmap(64, 64));
+            this._AchievementImages = new(this._AchievementImageList);
+            this._IconCache = new("achievements", this._AchievementImageList.ImageSize, _MaximumConcurrentIconLoads);
+
+            // Index 0 is the placeholder every achievement starts on.
+            this._AchievementImages.Add(
+                "Blank",
+                new Bitmap(this._AchievementImageList.ImageSize.Width, this._AchievementImageList.ImageSize.Height));
 
             this._StatisticsDataGridView.AutoGenerateColumns = false;
 
@@ -86,8 +108,6 @@ namespace SAM.Game
             this._GameId = gameId;
             this._SteamClient = client;
 
-            this._IconDownloader.DownloadDataCompleted += this.OnIconDownload;
-
             string name = this._SteamClient.SteamApps001.GetAppData((uint)this._GameId, "name");
             if (name != null)
             {
@@ -106,69 +126,170 @@ namespace SAM.Game
             this.RefreshStats();
         }
 
-        private void AddAchievementIcon(Stats.AchievementInfo info, Image icon)
+        protected override void OnLoad(EventArgs e)
         {
-            if (icon == null)
+            base.OnLoad(e);
+
+            this._IconCache.SchedulePrune(_CacheRetention);
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            base.OnFormClosed(e);
+
+            // Cancel, but do not dispose: loads that are still unwinding keep observing the
+            // token, and tearing it down here would only trade cancellation for a fault.
+            this._Shutdown.Cancel();
+            this._IconCache.Dispose();
+        }
+
+        private static string GetIconName(Stats.AchievementInfo info)
+        {
+            return info.IsAchieved == true ? info.IconNormal : info.IconLocked;
+        }
+
+        private void EnqueueAchievementIcon(Stats.AchievementInfo info)
+        {
+            var iconName = GetIconName(info);
+            if (string.IsNullOrEmpty(iconName) == true)
             {
                 info.ImageIndex = 0;
+                return;
             }
-            else
+
+            if (this._AchievementImages.TryGetIndex(iconName, out int imageIndex) == true)
             {
-                info.ImageIndex = this._AchievementImageList.Images.Count;
-                this._AchievementImageList.Images.Add(info.IsAchieved == true ? info.IconNormal : info.IconLocked, icon);
+                info.ImageIndex = imageIndex;
+                return;
             }
+
+            info.ImageIndex = 0;
+            this._IconQueue.Enqueue(info);
         }
 
-        private void OnIconDownload(object sender, DownloadDataCompletedEventArgs e)
+        private void StartIconPump()
         {
-            if (e.Error == null && e.Cancelled == false)
+            if (this._IsPumpingIcons == true)
             {
-                var info = (Stats.AchievementInfo)e.UserState;
+                return;
+            }
 
-                Bitmap bitmap;
-                try
+            // PumpIconsAsync swallows its own failures, so the task can be discarded.
+            this.PumpIconsAsync().Forget();
+        }
+
+        /// <summary>
+        /// Keeps up to <see cref="_MaximumConcurrentIconLoads"/> icon loads in flight until
+        /// the queue drains. Only one pump runs at a time, and everything outside the awaits
+        /// stays on the UI thread.
+        /// </summary>
+        private async Task PumpIconsAsync()
+        {
+            if (this._IsPumpingIcons == true)
+            {
+                return;
+            }
+
+            this._IsPumpingIcons = true;
+            List<Task> running = new();
+            try
+            {
+                while (true)
                 {
-                    using (MemoryStream stream = new())
+                    while (running.Count < _MaximumConcurrentIconLoads && this._IconQueue.Count > 0)
                     {
-                        stream.Write(e.Result, 0, e.Result.Length);
-                        bitmap = new(stream);
+                        running.Add(this.LoadAchievementIconAsync(this._IconQueue.Dequeue()));
+                    }
+
+                    if (running.Count == 0)
+                    {
+                        break;
+                    }
+
+                    this._DownloadStatusLabel.Text =
+                        _($"Downloading {running.Count + this._IconQueue.Count} icons...");
+                    this._DownloadStatusLabel.Visible = true;
+
+                    var completed = await Task.WhenAny(running).ConfigureAwait(true);
+                    running.Remove(completed);
+
+                    if (this.IsDisposed == true || this._ShutdownToken.IsCancellationRequested == true)
+                    {
+                        return;
                     }
                 }
-                catch (Exception)
-                {
-                    bitmap = null;
-                }
-
-                this.AddAchievementIcon(info, bitmap);
-                this._AchievementListView.Update();
             }
-
-            this.DownloadNextIcon();
+            catch (Exception)
+            {
+                // Icons are decorative. Most failures here are the form going away while a
+                // continuation was queued, and none of them justify taking down the app.
+            }
+            finally
+            {
+                this._IsPumpingIcons = false;
+                if (this.IsDisposed == false)
+                {
+                    this._DownloadStatusLabel.Visible = false;
+                }
+            }
         }
 
-        private void DownloadNextIcon()
+        /// <summary>
+        /// Resolves one achievement icon and publishes it to the image list. Never throws:
+        /// the pump observes completion only, so a fault here would go unobserved.
+        /// </summary>
+        private async Task LoadAchievementIconAsync(Stats.AchievementInfo info)
         {
-            if (this._IconQueue.Count == 0)
+            var iconName = GetIconName(info);
+            Bitmap bitmap = null;
+            try
             {
-                this._DownloadStatusLabel.Visible = false;
+                // Another achievement sharing this icon may have resolved it in the meantime.
+                if (this._AchievementImages.TryGetIndex(iconName, out int imageIndex) == true)
+                {
+                    this.ApplyAchievementIcon(info, imageIndex);
+                    return;
+                }
+
+                var uri = new Uri(_($"https://cdn.steamstatic.com/steamcommunity/public/images/apps/{this._GameId}/{iconName}"));
+
+                bitmap = await this._IconCache
+                    .GetAsync(CacheKey.ForAchievementIcon(this._GameId, iconName), uri)
+                    .ConfigureAwait(true);
+
+                if (bitmap == null || this.IsDisposed == true)
+                {
+                    return;
+                }
+
+                // The image list takes ownership of the bitmap from here.
+                imageIndex = this._AchievementImages.Add(iconName, bitmap);
+                bitmap = null;
+
+                this.ApplyAchievementIcon(info, imageIndex);
+            }
+            catch (Exception)
+            {
+                // A single missing icon must never take down the pump.
+            }
+            finally
+            {
+                bitmap?.Dispose();
+            }
+        }
+
+        private void ApplyAchievementIcon(Stats.AchievementInfo info, int imageIndex)
+        {
+            // The list may have been rebuilt by a filter change while this icon was in
+            // flight, leaving this info attached to an item that is no longer displayed.
+            var item = info.Item;
+            if (item == null || item.ListView != this._AchievementListView)
+            {
                 return;
             }
 
-            if (this._IconDownloader.IsBusy == true)
-            {
-                return;
-            }
-
-            this._DownloadStatusLabel.Text = $"Downloading {this._IconQueue.Count} icons...";
-            this._DownloadStatusLabel.Visible = true;
-
-            var info = this._IconQueue[0];
-            this._IconQueue.RemoveAt(0);
-
-
-            this._IconDownloader.DownloadDataAsync(
-                new Uri(_($"https://cdn.steamstatic.com/steamcommunity/public/images/apps/{this._GameId}/{(info.IsAchieved == true ? info.IconNormal : info.IconLocked)}")),
-                info);
+            info.ImageIndex = imageIndex;
+            this._AchievementListView.Invalidate();
         }
 
         private static string TranslateError(int id) => id switch
@@ -203,7 +324,7 @@ namespace SAM.Game
             return defaultValue;
         }
 
-        private bool LoadUserGameStatsSchema()
+        private async Task<bool> LoadUserGameStatsSchemaAsync()
         {
             string path;
             try
@@ -211,18 +332,14 @@ namespace SAM.Game
                 string fileName = _($"UserGameStatsSchema_{this._GameId}.bin");
                 path = API.Steam.GetInstallPath();
                 path = Path.Combine(path, "appcache", "stats", fileName);
-                if (File.Exists(path) == false)
-                {
-                    return false;
-                }
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 return false;
             }
 
-            var kv = KeyValue.LoadAsBinary(path);
-            if (kv == null)
+            var kv = await KeyValue.LoadAsBinaryAsync(path, this._ShutdownToken).ConfigureAwait(true);
+            if (kv == null || this.IsDisposed == true)
             {
                 return false;
             }
@@ -364,7 +481,7 @@ namespace SAM.Game
             return true;
         }
 
-        private void OnUserStatsReceived(APITypes.UserStatsReceived param)
+        private async void OnUserStatsReceived(APITypes.UserStatsReceived param)
         {
             if (param.Result != 1)
             {
@@ -373,7 +490,24 @@ namespace SAM.Game
                 return;
             }
 
-            if (this.LoadUserGameStatsSchema() == false)
+            this._GameStatusLabel.Text = "Loading schema...";
+
+            bool loaded;
+            try
+            {
+                loaded = await this.LoadUserGameStatsSchemaAsync().ConfigureAwait(true);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            if (this.IsDisposed == true || this._ShutdownToken.IsCancellationRequested == true)
+            {
+                return;
+            }
+
+            if (loaded == false)
             {
                 this._GameStatusLabel.Text = "Failed to load schema.";
                 this.EnableInput();
@@ -445,6 +579,9 @@ namespace SAM.Game
                 : null;
 
             this._IsUpdatingAchievementList = true;
+
+            // Anything still queued refers to the list being torn down here.
+            this._IconQueue.Clear();
 
             this._AchievementListView.Items.Clear();
             this._AchievementListView.BeginUpdate();
@@ -525,16 +662,14 @@ namespace SAM.Game
                     ? info.UnlockTime.Value.ToString()
                     : "");
 
-                info.ImageIndex = 0;
-
-                this.AddAchievementToIconQueue(info, false);
+                this.EnqueueAchievementIcon(info);
                 this._AchievementListView.Items.Add(item);
             }
 
             this._AchievementListView.EndUpdate();
             this._IsUpdatingAchievementList = false;
 
-            this.DownloadNextIcon();
+            this.StartIconPump();
         }
 
         private void GetStatistics()
@@ -578,26 +713,6 @@ namespace SAM.Game
                         IsIncrementOnly = floatStat.IncrementOnly,
                         Permission = floatStat.Permission,
                     });
-                }
-            }
-        }
-
-        private void AddAchievementToIconQueue(Stats.AchievementInfo info, bool startDownload)
-        {
-            int imageIndex = this._AchievementImageList.Images.IndexOfKey(
-                info.IsAchieved == true ? info.IconNormal : info.IconLocked);
-
-            if (imageIndex >= 0)
-            {
-                info.ImageIndex = imageIndex;
-            }
-            else
-            {
-                this._IconQueue.Add(info);
-
-                if (startDownload == true)
-                {
-                    this.DownloadNextIcon();
                 }
             }
         }

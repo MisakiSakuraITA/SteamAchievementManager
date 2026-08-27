@@ -20,19 +20,15 @@
  *    distribution.
  */
 
-using System.Drawing;
+using System;
 
-namespace SAM.Picker
+namespace SAM.Core
 {
-    internal class LogoInfo
+    public static class InvariantShorthand
     {
-        public readonly uint Id;
-        public readonly Bitmap Bitmap;
-
-        public LogoInfo(uint id, Bitmap bitmap)
+        public static string _(FormattableString formattable)
         {
-            this.Id = id;
-            this.Bitmap = bitmap;
+            return FormattableString.Invariant(formattable);
         }
     }
 }

@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyTitle>Steam Achievement Manager Core</AssemblyTitle>
+    <Company>Gibbed</Company>
+    <Authors>Gibbed</Authors>
+    <Description>Shared caching, networking and imaging infrastructure for the Steam Achievement Manager.</Description>
+    <Copyright>Copyright © Gibbed 2019</Copyright>
+  </PropertyGroup>
+  <PropertyGroup>
+    <Version>7.0.0</Version>
+    <AssemblyVersion>7.0.0.0</AssemblyVersion>
+    <FileVersion>7.0.0.0</FileVersion>
+  </PropertyGroup>
+  <PropertyGroup>
+    <RepositoryUrl>https://github.com/gibbed/SteamAchievementManager/</RepositoryUrl>
+    <RepositoryType>Git</RepositoryType>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Platforms>x86</Platforms>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Windows.Forms" />
+  </ItemGroup>
+</Project>

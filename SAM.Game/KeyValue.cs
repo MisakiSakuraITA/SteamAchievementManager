@@ -24,11 +24,16 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using SAM.Core.IO;
 
 namespace SAM.Game
 {
     internal class KeyValue
     {
+        private const long _MaximumSchemaLength = 64 * 1024 * 1024;
+
         private static readonly KeyValue _Invalid = new();
         public string Name = "<root>";
         public KeyValueType Type = KeyValueType.None;
@@ -196,16 +201,29 @@ namespace SAM.Game
             return $"{this.Name} = {this.Value}";
         }
 
-        public static KeyValue LoadAsBinary(string path)
+        /// <summary>
+        /// Reads and parses a binary key-values file without blocking the caller: the read
+        /// is asynchronous and the parse runs on the thread pool. Schemas for large games
+        /// run to several megabytes, which is long enough to stall the UI noticeably.
+        /// </summary>
+        public static async Task<KeyValue> LoadAsBinaryAsync(string path, CancellationToken cancellationToken)
         {
-            if (File.Exists(path) == false)
+            var data = await AsyncFile
+                .TryReadAllBytesAsync(path, _MaximumSchemaLength, cancellationToken)
+                .ConfigureAwait(false);
+            if (data == null)
             {
                 return null;
             }
 
+            return await Task.Run(() => ParseBinary(data), cancellationToken).ConfigureAwait(false);
+        }
+
+        private static KeyValue ParseBinary(byte[] data)
+        {
             try
             {
-                using (var input = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                using (MemoryStream input = new(data, false))
                 {
                     KeyValue kv = new();
                     if (kv.ReadAsBinary(input) == false)

@@ -107,9 +107,16 @@ namespace SAM.Game
                     return;
                 }
 
-                Application.EnableVisualStyles();
-                Application.SetCompatibleTextRenderingDefault(false);
-                Application.Run(new Manager(appId, client));
+                try
+                {
+                    Application.EnableVisualStyles();
+                    Application.SetCompatibleTextRenderingDefault(false);
+                    Application.Run(new Manager(appId, client));
+                }
+                finally
+                {
+                    Core.Net.HttpDownloader.Shutdown();
+                }
             }
         }
     }

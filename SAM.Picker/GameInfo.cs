@@ -20,6 +20,7 @@
  *    distribution.
  */
 
+using System;
 using System.Globalization;
 using System.Windows.Forms;
 
@@ -40,6 +41,13 @@ namespace SAM.Picker
         }
 
         public string ImageUrl;
+        public Uri ImageUri;
+
+        /// <summary>
+        /// Whether the game survived the current search and type filters. Kept as a flag so
+        /// the icon pump can test membership without scanning the filtered list.
+        /// </summary>
+        public bool IsFiltered;
 
         public ListViewItem Item;
 
@@ -50,6 +58,8 @@ namespace SAM.Picker
             this.Name = null;
             this.ImageIndex = 0;
             this.ImageUrl = null;
+            this.ImageUri = null;
+            this.IsFiltered = false;
         }
     }
 }

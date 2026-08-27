@@ -1,4 +1,4 @@
-/* Copyright (c) 2024 Rick (rick 'at' gibbed 'dot' us)
+﻿/* Copyright (c) 2024 Rick (rick 'at' gibbed 'dot' us)
  *
  * This software is provided 'as-is', without any express or implied
  * warranty. In no event will the authors be held liable for any damages
@@ -21,61 +21,107 @@
  */
 
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
-using System.IO;
 using System.Linq;
-using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Xml.XPath;
-using static SAM.Picker.InvariantShorthand;
+using SAM.Core.Caching;
+using SAM.Core.Threading;
+using SAM.Core.WinForms;
+using static SAM.Core.InvariantShorthand;
 using APITypes = SAM.API.Types;
 
 namespace SAM.Picker
 {
     internal partial class GamePicker : Form
     {
+        private const int _MaximumConcurrentLogoLoads = 6;
+        private const int _OwnershipSliceMilliseconds = 8;
+
+        private static readonly TimeSpan _CacheRetention = TimeSpan.FromDays(90);
+
         private readonly API.Client _SteamClient;
 
         private readonly Dictionary<uint, GameInfo> _Games;
         private readonly List<GameInfo> _FilteredGames;
 
-        private readonly object _LogoLock;
-        private readonly HashSet<string> _LogosAttempting;
-        private readonly HashSet<string> _LogosAttempted;
-        private readonly ConcurrentQueue<GameInfo> _LogoQueue;
+        private readonly Queue<GameInfo> _LogoQueue;
+        private readonly HashSet<string> _QueuedLogos;
+        private readonly ImageCache _LogoCache;
+        private readonly ImageListCache _LogoImages;
+
+        private readonly CancellationTokenSource _Shutdown;
+        private readonly CancellationToken _ShutdownToken;
 
         private readonly API.Callbacks.AppDataChanged _AppDataChangedCallback;
+
+        private bool _IsPumpingLogos;
+        private bool _IsLoadingGameList;
 
         public GamePicker(API.Client client)
         {
             this._Games = new();
             this._FilteredGames = new();
-            this._LogoLock = new();
-            this._LogosAttempting = new();
-            this._LogosAttempted = new();
             this._LogoQueue = new();
+            this._QueuedLogos = new(StringComparer.Ordinal);
+            this._Shutdown = new();
+            this._ShutdownToken = this._Shutdown.Token;
 
             this.InitializeComponent();
 
-            Bitmap blank = new(this._LogoImageList.ImageSize.Width, this._LogoImageList.ImageSize.Height);
-            using (var g = Graphics.FromImage(blank))
-            {
-                g.Clear(Color.DimGray);
-            }
+            this._LogoImages = new(this._LogoImageList);
+            this._LogoCache = new("logos", this._LogoImageList.ImageSize, _MaximumConcurrentLogoLoads);
 
-            this._LogoImageList.Images.Add("Blank", blank);
+            // Index 0 is the placeholder every game starts on.
+            this._LogoImages.Add("Blank", CreateBlankLogo(this._LogoImageList.ImageSize));
 
             this._SteamClient = client;
 
             this._AppDataChangedCallback = client.CreateAndRegisterCallback<API.Callbacks.AppDataChanged>();
             this._AppDataChangedCallback.OnRun += this.OnAppDataChanged;
+        }
 
-            this.AddGames();
+        private static Bitmap CreateBlankLogo(Size size)
+        {
+            Bitmap blank = new(size.Width, size.Height);
+            try
+            {
+                using (var graphics = Graphics.FromImage(blank))
+                {
+                    graphics.Clear(Color.DimGray);
+                }
+                return blank;
+            }
+            catch (Exception)
+            {
+                blank.Dispose();
+                throw;
+            }
+        }
+
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+
+            this._LogoCache.SchedulePrune(_CacheRetention);
+
+            // The list load owns its own error handling, so discarding the task is safe.
+            this.ReloadGamesAsync().Forget();
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            base.OnFormClosed(e);
+
+            // Cancel, but do not dispose: loads that are still unwinding keep observing the
+            // token, and tearing it down here would only trade cancellation for a fault.
+            this._Shutdown.Cancel();
+            this._LogoCache.Dispose();
         }
 
         private void OnAppDataChanged(APITypes.AppDataChanged param)
@@ -92,55 +138,159 @@ namespace SAM.Picker
 
             game.Name = this._SteamClient.SteamApps001.GetAppData(game.Id, "name");
 
-            this.AddGameToLogoQueue(game);
-            this.DownloadNextLogo();
+            // The app data behind the capsule URL may have changed too, so drop the resolved
+            // URL and let EnqueueLogo ask Steam again.
+            game.ImageUrl = null;
+            game.ImageUri = null;
+
+            this.EnqueueLogo(game);
+            this.StartLogoPump();
         }
 
-        private void DoDownloadList(object sender, DoWorkEventArgs e)
-        {
-            this._PickerStatusLabel.Text = "Downloading game list...";
+        #region Game list
 
-            byte[] bytes;
-            using (WebClient downloader = new())
+        private async Task ReloadGamesAsync()
+        {
+            if (this._IsLoadingGameList == true)
             {
-                bytes = downloader.DownloadData(new Uri("https://gib.me/sam/games.xml"));
+                return;
             }
 
-            List<KeyValuePair<uint, string>> pairs = new();
-            using (MemoryStream stream = new(bytes, false))
+            this._IsLoadingGameList = true;
+            this._RefreshGamesButton.Enabled = false;
+            try
             {
-                XPathDocument document = new(stream);
-                var navigator = document.CreateNavigator();
-                var nodes = navigator.Select("/games/game");
-                while (nodes.MoveNext() == true)
+                this._Games.Clear();
+                this.ClearLogoQueue();
+
+                this._PickerStatusLabel.Text = "Downloading game list...";
+
+                List<GameListEntry> entries = null;
+                string failure = null;
+                try
                 {
-                    string type = nodes.Current.GetAttribute("type", "");
-                    if (string.IsNullOrEmpty(type) == true)
-                    {
-                        type = "normal";
-                    }
-                    pairs.Add(new((uint)nodes.Current.ValueAsLong, type));
+                    entries = await GameListLoader.LoadAsync(this._ShutdownToken).ConfigureAwait(true);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    failure = ex.Message;
+                }
+
+                if (this.IsDisposed == true || this._ShutdownToken.IsCancellationRequested == true)
+                {
+                    return;
+                }
+
+                if (entries == null)
+                {
+                    this.AddDefaultGames();
+                    this.RefreshGames();
+                    MessageBox.Show(
+                        this,
+                        "Failed to retrieve the game list.\n\n(" + failure + ")",
+                        "Error",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
+                    return;
+                }
+
+                await this.ScanOwnershipAsync(entries).ConfigureAwait(true);
+                if (this.IsDisposed == true || this._ShutdownToken.IsCancellationRequested == true)
+                {
+                    return;
+                }
+
+                this.RefreshGames();
+                this.StartLogoPump();
+            }
+            catch (Exception ex)
+            {
+                // Both entry points discard this task, so anything unexpected has to be
+                // reported here or it would vanish and leave an empty list behind.
+                if (this.IsDisposed == false)
+                {
+                    MessageBox.Show(
+                        this,
+                        "Error while building the game list:\n" + ex,
+                        "Error",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
                 }
             }
-
-            this._PickerStatusLabel.Text = "Checking game ownership...";
-            foreach (var kv in pairs)
+            finally
             {
-                this.AddGame(kv.Key, kv.Value);
+                this._IsLoadingGameList = false;
+                if (this.IsDisposed == false)
+                {
+                    this._RefreshGamesButton.Enabled = true;
+                }
             }
         }
 
-        private void OnDownloadList(object sender, RunWorkerCompletedEventArgs e)
+        /// <summary>
+        /// Walks the candidate list asking Steam what the user owns.
+        /// </summary>
+        /// <remarks>
+        /// These are native calls into the Steam client, and the callback timer drives the
+        /// same pipe from the UI thread, so they are deliberately kept on the UI thread
+        /// rather than moved to a worker. Responsiveness comes from yielding the message
+        /// pump on a time slice instead.
+        /// </remarks>
+        private async Task ScanOwnershipAsync(List<GameListEntry> entries)
         {
-            if (e.Error != null || e.Cancelled == true)
+            var slice = Stopwatch.StartNew();
+            for (int i = 0; i < entries.Count; i++)
             {
-                this.AddDefaultGames();
-                MessageBox.Show(e.Error.ToString(), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                var entry = entries[i];
+                this.AddGame(entry.Id, entry.Type);
+
+                if (slice.ElapsedMilliseconds < _OwnershipSliceMilliseconds)
+                {
+                    continue;
+                }
+
+                this._PickerStatusLabel.Text = _($"Checking game ownership... ({i + 1} of {entries.Count})");
+
+                await Task.Yield();
+
+                if (this.IsDisposed == true || this._ShutdownToken.IsCancellationRequested == true)
+                {
+                    return;
+                }
+
+                slice.Restart();
+            }
+        }
+
+        private bool OwnsGame(uint id)
+        {
+            return this._SteamClient.SteamApps008.IsSubscribedApp(id);
+        }
+
+        private void AddGame(uint id, string type)
+        {
+            if (this._Games.ContainsKey(id) == true)
+            {
+                return;
             }
 
-            this.RefreshGames();
-            this._RefreshGamesButton.Enabled = true;
-            this.DownloadNextLogo();
+            if (this.OwnsGame(id) == false)
+            {
+                return;
+            }
+
+            GameInfo info = new(id, type);
+            info.Name = this._SteamClient.SteamApps001.GetAppData(info.Id, "name");
+            this._Games.Add(id, info);
+        }
+
+        private void AddDefaultGames()
+        {
+            this.AddGame(480, "normal"); // Spacewar
         }
 
         private void RefreshGames()
@@ -157,6 +307,8 @@ namespace SAM.Picker
             this._FilteredGames.Clear();
             foreach (var info in this._Games.Values.OrderBy(gi => gi.Name))
             {
+                info.IsFiltered = false;
+
                 if (nameSearch != null &&
                     info.Name.IndexOf(nameSearch, StringComparison.OrdinalIgnoreCase) < 0)
                 {
@@ -176,6 +328,7 @@ namespace SAM.Picker
                     continue;
                 }
 
+                info.IsFiltered = true;
                 this._FilteredGames.Add(info);
             }
 
@@ -190,150 +343,9 @@ namespace SAM.Picker
             }
         }
 
-        private void OnGameListViewRetrieveVirtualItem(object sender, RetrieveVirtualItemEventArgs e)
-        {
-            var info = this._FilteredGames[e.ItemIndex];
-            e.Item = info.Item = new()
-            {
-                Text = info.Name,
-                ImageIndex = info.ImageIndex,
-            };
-        }
+        #endregion
 
-        private void OnGameListViewSearchForVirtualItem(object sender, SearchForVirtualItemEventArgs e)
-        {
-            if (e.Direction != SearchDirectionHint.Down || e.IsTextSearch == false)
-            {
-                return;
-            }
-
-            var count = this._FilteredGames.Count;
-            if (count < 2)
-            {
-                return;
-            }
-
-            var text = e.Text;
-            int startIndex = e.StartIndex;
-
-            Predicate<GameInfo> predicate;
-            /*if (e.IsPrefixSearch == true)*/
-            {
-                predicate = gi => gi.Name != null && gi.Name.StartsWith(text, StringComparison.CurrentCultureIgnoreCase);
-            }
-            /*else
-            {
-                predicate = gi => gi.Name != null && string.Compare(gi.Name, text, StringComparison.CurrentCultureIgnoreCase) == 0;
-            }*/
-
-            int index;
-            if (e.StartIndex >= count)
-            {
-                // starting from the last item in the list
-                index = this._FilteredGames.FindIndex(0, startIndex - 1, predicate);
-            }
-            else if (startIndex <= 0)
-            {
-                // starting from the first item in the list
-                index = this._FilteredGames.FindIndex(0, count, predicate);
-            }
-            else
-            {
-                index = this._FilteredGames.FindIndex(startIndex, count - startIndex, predicate);
-                if (index < 0)
-                {
-                    index = this._FilteredGames.FindIndex(0, startIndex - 1, predicate);
-                }
-            }
-
-            e.Index = index < 0 ? -1 : index;
-        }
-
-        private void DoDownloadLogo(object sender, DoWorkEventArgs e)
-        {
-            var info = (GameInfo)e.Argument;
-
-            this._LogosAttempted.Add(info.ImageUrl);
-
-            using (WebClient downloader = new())
-            {
-                try
-                {
-                    var data = downloader.DownloadData(new Uri(info.ImageUrl));
-                    using (MemoryStream stream = new(data, false))
-                    {
-                        Bitmap bitmap = new(stream);
-                        e.Result = new LogoInfo(info.Id, bitmap);
-                    }
-                }
-                catch (Exception)
-                {
-                    e.Result = new LogoInfo(info.Id, null);
-                }
-            }
-        }
-
-        private void OnDownloadLogo(object sender, RunWorkerCompletedEventArgs e)
-        {
-            if (e.Error != null || e.Cancelled == true)
-            {
-                return;
-            }
-
-            if (e.Result is LogoInfo logoInfo &&
-                logoInfo.Bitmap != null &&
-                this._Games.TryGetValue(logoInfo.Id, out var gameInfo) == true)
-            {
-                this._GameListView.BeginUpdate();
-                var imageIndex = this._LogoImageList.Images.Count;
-                this._LogoImageList.Images.Add(gameInfo.ImageUrl, logoInfo.Bitmap);
-                gameInfo.ImageIndex = imageIndex;
-                this._GameListView.EndUpdate();
-            }
-
-            this.DownloadNextLogo();
-        }
-
-        private void DownloadNextLogo()
-        {
-            lock (this._LogoLock)
-            {
-
-                if (this._LogoWorker.IsBusy == true)
-                {
-                    return;
-                }
-
-                GameInfo info;
-                while (true)
-                {
-                    if (this._LogoQueue.TryDequeue(out info) == false)
-                    {
-                        this._DownloadStatusLabel.Visible = false;
-                        return;
-                    }
-
-                    if (info.Item == null)
-                    {
-                        continue;
-                    }
-
-                    if (this._FilteredGames.Contains(info) == false ||
-                        info.Item.Bounds.IntersectsWith(this._GameListView.ClientRectangle) == false)
-                    {
-                        this._LogosAttempting.Remove(info.ImageUrl);
-                        continue;
-                    }
-
-                    break;
-                }
-
-                this._DownloadStatusLabel.Text = $"Downloading {1 + this._LogoQueue.Count} game icons...";
-                this._DownloadStatusLabel.Visible = true;
-
-                this._LogoWorker.RunWorkerAsync(info);
-            }
-        }
+        #region Logos
 
         private string GetGameImageUrl(uint id)
         {
@@ -365,68 +377,252 @@ namespace SAM.Picker
             return null;
         }
 
-        private void AddGameToLogoQueue(GameInfo info)
+        private void EnqueueLogo(GameInfo info)
         {
             if (info.ImageIndex > 0)
             {
                 return;
             }
 
-            var imageUrl = GetGameImageUrl(info.Id);
-            if (string.IsNullOrEmpty(imageUrl) == true)
+            // This runs from the paint handler for every still-blank row, and resolving a URL
+            // costs one to three calls into the Steam client, so only do it once per game.
+            if (info.ImageUri == null)
             {
-                return;
+                var resolved = this.GetGameImageUrl(info.Id);
+                if (string.IsNullOrEmpty(resolved) == true ||
+                    Uri.TryCreate(resolved, UriKind.Absolute, out var resolvedUri) == false)
+                {
+                    return;
+                }
+
+                info.ImageUrl = resolved;
+                info.ImageUri = resolvedUri;
             }
 
-            info.ImageUrl = imageUrl;
+            var imageUrl = info.ImageUrl;
 
-            int imageIndex = this._LogoImageList.Images.IndexOfKey(imageUrl);
-            if (imageIndex >= 0)
+            if (this._LogoImages.TryGetIndex(imageUrl, out int imageIndex) == true)
             {
                 info.ImageIndex = imageIndex;
+                return;
             }
-            else if (
-                this._LogosAttempting.Contains(imageUrl) == false &&
-                this._LogosAttempted.Contains(imageUrl) == false)
-            {
-                this._LogosAttempting.Add(imageUrl);
-                this._LogoQueue.Enqueue(info);
-            }
-        }
 
-        private bool OwnsGame(uint id)
-        {
-            return this._SteamClient.SteamApps008.IsSubscribedApp(id);
-        }
-
-        private void AddGame(uint id, string type)
-        {
-            if (this._Games.ContainsKey(id) == true)
+            if (this._QueuedLogos.Add(imageUrl) == false)
             {
                 return;
             }
 
-            if (this.OwnsGame(id) == false)
+            this._LogoQueue.Enqueue(info);
+        }
+
+        private void ClearLogoQueue()
+        {
+            this._LogoQueue.Clear();
+            this._QueuedLogos.Clear();
+        }
+
+        private bool TryDequeueLogo(out GameInfo info)
+        {
+            while (this._LogoQueue.Count > 0)
+            {
+                var candidate = this._LogoQueue.Dequeue();
+
+                if (candidate.Item != null &&
+                    candidate.IsFiltered == true &&
+                    candidate.Item.Bounds.IntersectsWith(this._GameListView.ClientRectangle) == true)
+                {
+                    info = candidate;
+                    return true;
+                }
+
+                // Filtered out or scrolled off-screen: forget it, so painting it again later
+                // puts it back in the queue.
+                this._QueuedLogos.Remove(candidate.ImageUrl);
+            }
+
+            info = null;
+            return false;
+        }
+
+        private void StartLogoPump()
+        {
+            if (this._IsPumpingLogos == true)
             {
                 return;
             }
 
-            GameInfo info = new(id, type);
-            info.Name = this._SteamClient.SteamApps001.GetAppData(info.Id, "name");
-            this._Games.Add(id, info);
+            // PumpLogosAsync swallows its own failures, so the task can be discarded.
+            this.PumpLogosAsync().Forget();
         }
 
-        private void AddGames()
+        /// <summary>
+        /// Keeps up to <see cref="_MaximumConcurrentLogoLoads"/> icon loads in flight until
+        /// the queue drains. Only one pump runs at a time, and everything outside the awaits
+        /// stays on the UI thread.
+        /// </summary>
+        private async Task PumpLogosAsync()
         {
-            this._Games.Clear();
-            this._RefreshGamesButton.Enabled = false;
-            this._ListWorker.RunWorkerAsync();
+            if (this._IsPumpingLogos == true)
+            {
+                return;
+            }
+
+            this._IsPumpingLogos = true;
+            List<Task> running = new();
+            try
+            {
+                while (true)
+                {
+                    while (running.Count < _MaximumConcurrentLogoLoads &&
+                           this.TryDequeueLogo(out var info) == true)
+                    {
+                        running.Add(this.LoadLogoAsync(info));
+                    }
+
+                    if (running.Count == 0)
+                    {
+                        break;
+                    }
+
+                    this._DownloadStatusLabel.Text =
+                        _($"Downloading {running.Count + this._LogoQueue.Count} game icons...");
+                    this._DownloadStatusLabel.Visible = true;
+
+                    var completed = await Task.WhenAny(running).ConfigureAwait(true);
+                    running.Remove(completed);
+
+                    if (this.IsDisposed == true || this._ShutdownToken.IsCancellationRequested == true)
+                    {
+                        return;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Icons are decorative. Most failures here are the form going away while a
+                // continuation was queued, and none of them justify taking down the app.
+            }
+            finally
+            {
+                this._IsPumpingLogos = false;
+                if (this.IsDisposed == false)
+                {
+                    this._DownloadStatusLabel.Visible = false;
+                }
+            }
         }
 
-        private void AddDefaultGames()
+        /// <summary>
+        /// Resolves one logo and publishes it to the image list. Never throws: the pump
+        /// observes completion only, so a fault here would go unobserved.
+        /// </summary>
+        private async Task LoadLogoAsync(GameInfo info)
         {
-            this.AddGame(480, "normal"); // Spacewar
+            var imageUrl = info.ImageUrl;
+            Bitmap bitmap = null;
+            try
+            {
+                bitmap = await this._LogoCache
+                    .GetAsync(CacheKey.ForGameLogo(info.Id, imageUrl), info.ImageUri)
+                    .ConfigureAwait(true);
+
+                if (bitmap == null || this.IsDisposed == true)
+                {
+                    return;
+                }
+
+                // The image list takes ownership of the bitmap from here.
+                info.ImageIndex = this._LogoImages.Add(imageUrl, bitmap);
+                bitmap = null;
+
+                this._GameListView.Invalidate();
+            }
+            catch (Exception)
+            {
+                // A single missing icon must never take down the pump.
+            }
+            finally
+            {
+                bitmap?.Dispose();
+            }
         }
+
+        #endregion
+
+        #region List view
+
+        private void OnGameListViewRetrieveVirtualItem(object sender, RetrieveVirtualItemEventArgs e)
+        {
+            var info = this._FilteredGames[e.ItemIndex];
+            e.Item = info.Item = new()
+            {
+                Text = info.Name,
+                ImageIndex = info.ImageIndex,
+            };
+        }
+
+        private void OnGameListViewSearchForVirtualItem(object sender, SearchForVirtualItemEventArgs e)
+        {
+            if (e.Direction != SearchDirectionHint.Down || e.IsTextSearch == false)
+            {
+                return;
+            }
+
+            var count = this._FilteredGames.Count;
+            if (count < 2)
+            {
+                return;
+            }
+
+            var text = e.Text;
+            int startIndex = e.StartIndex;
+
+            Predicate<GameInfo> predicate =
+                gi => gi.Name != null && gi.Name.StartsWith(text, StringComparison.CurrentCultureIgnoreCase);
+
+            int index;
+            if (e.StartIndex >= count)
+            {
+                // starting from the last item in the list
+                index = this._FilteredGames.FindIndex(0, startIndex - 1, predicate);
+            }
+            else if (startIndex <= 0)
+            {
+                // starting from the first item in the list
+                index = this._FilteredGames.FindIndex(0, count, predicate);
+            }
+            else
+            {
+                index = this._FilteredGames.FindIndex(startIndex, count - startIndex, predicate);
+                if (index < 0)
+                {
+                    index = this._FilteredGames.FindIndex(0, startIndex - 1, predicate);
+                }
+            }
+
+            e.Index = index < 0 ? -1 : index;
+        }
+
+        private void OnGameListViewDrawItem(object sender, DrawListViewItemEventArgs e)
+        {
+            e.DrawDefault = true;
+
+            if (e.Item.Bounds.IntersectsWith(this._GameListView.ClientRectangle) == false)
+            {
+                return;
+            }
+
+            var info = this._FilteredGames[e.ItemIndex];
+            if (info.ImageIndex <= 0)
+            {
+                this.EnqueueLogo(info);
+                this.StartLogoPump();
+            }
+        }
+
+        #endregion
+
+        #region Commands
 
         private void OnTimer(object sender, EventArgs e)
         {
@@ -465,17 +661,15 @@ namespace SAM.Picker
             }
         }
 
-        private void OnRefresh(object sender, EventArgs e)
+        private async void OnRefresh(object sender, EventArgs e)
         {
             this._AddGameTextBox.Text = "";
-            this.AddGames();
+            await this.ReloadGamesAsync().ConfigureAwait(true);
         }
 
         private void OnAddGame(object sender, EventArgs e)
         {
-            uint id;
-
-            if (uint.TryParse(this._AddGameTextBox.Text, out id) == false)
+            if (uint.TryParse(this._AddGameTextBox.Text, out uint id) == false)
             {
                 MessageBox.Show(
                     this,
@@ -492,18 +686,15 @@ namespace SAM.Picker
                 return;
             }
 
-            while (this._LogoQueue.TryDequeue(out var logo) == true)
-            {
-                // clear the download queue because we will be showing only one app
-                this._LogosAttempted.Remove(logo.ImageUrl);
-            }
+            // Only one app will be shown, so anything still queued is now irrelevant.
+            this.ClearLogoQueue();
 
             this._AddGameTextBox.Text = "";
             this._Games.Clear();
             this.AddGame(id, "normal");
             this._FilterGamesMenuItem.Checked = true;
             this.RefreshGames();
-            this.DownloadNextLogo();
+            this.StartLogoPump();
         }
 
         private void OnFilterUpdate(object sender, EventArgs e)
@@ -514,21 +705,6 @@ namespace SAM.Picker
             this._SearchGameTextBox.Focus();
         }
 
-        private void OnGameListViewDrawItem(object sender, DrawListViewItemEventArgs e)
-        {
-            e.DrawDefault = true;
-
-            if (e.Item.Bounds.IntersectsWith(this._GameListView.ClientRectangle) == false)
-            {
-                return;
-            }
-
-            var info = this._FilteredGames[e.ItemIndex];
-            if (info.ImageIndex <= 0)
-            {
-                this.AddGameToLogoQueue(info);
-                this.DownloadNextLogo();
-            }
-        }
+        #endregion
     }
 }
