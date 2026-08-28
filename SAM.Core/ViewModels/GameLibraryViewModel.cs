@@ -22,7 +22,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
@@ -108,7 +107,7 @@ namespace SAM.Core.ViewModels
         }
 
         /// <summary>The filtered, sorted games the view binds to.</summary>
-        public ObservableCollection<GameViewModel> Games { get; }
+        public BulkObservableCollection<GameViewModel> Games { get; }
 
         public AsyncRelayCommand RefreshCommand { get; }
 
@@ -462,11 +461,7 @@ namespace SAM.Core.ViewModels
 
             var previous = this._SelectedGame;
 
-            this.Games.Clear();
-            foreach (var game in matched)
-            {
-                this.Games.Add(game);
-            }
+            this.Games.ReplaceAll(matched);
 
             // Keep the selection if it survived the filter, otherwise fall to the top.
             this.SelectedGame = previous != null && this.Games.Contains(previous) == true

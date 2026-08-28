@@ -22,7 +22,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -47,6 +46,7 @@ namespace SAM.Core.ViewModels
     public sealed class AchievementManagerViewModel : ObservableObject
     {
         private readonly ISteamStatsService _Steam;
+        private readonly IDialogService _DialogService;
         private readonly List<AchievementViewModel> _AllAchievements;
         private readonly List<StatViewModel> _AllStatistics;
         private readonly CancellationTokenSource _Shutdown;
@@ -62,9 +62,10 @@ namespace SAM.Core.ViewModels
         internal const string _DisconnectedMessage =
             "Steam is no longer running. Please launch Steam and restart the application.";
 
-        public AchievementManagerViewModel(ISteamStatsService steam)
+        public AchievementManagerViewModel(ISteamStatsService steam, IDialogService dialogService)
         {
             this._Steam = steam ?? throw new ArgumentNullException(nameof(steam));
+            this._DialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
             this._AllAchievements = new();
             this._AllStatistics = new();
             this._Shutdown = new();
@@ -80,7 +81,7 @@ namespace SAM.Core.ViewModels
             this.UnlockAllCommand = new(() => this.SetAll(true), this.CanReachSteam);
             this.LockAllCommand = new(() => this.SetAll(false), this.CanReachSteam);
             this.InvertAllCommand = new(this.InvertAll, this.CanReachSteam);
-            this.ResetAllCommand = new(this.ResetAll, this.CanReachSteam);
+            this.ResetAllCommand = new(this.ResetAllAsync, this.CanReachSteam);
 
             this._Steam.UserStatsReceived += this.OnUserStatsReceived;
             this._Steam.Disconnected += this.OnSteamDisconnected;
@@ -92,9 +93,9 @@ namespace SAM.Core.ViewModels
         /// </summary>
         private bool CanReachSteam() => this._IsBusy == false && this._IsSteamConnected == true;
 
-        public ObservableCollection<AchievementViewModel> Achievements { get; }
+        public BulkObservableCollection<AchievementViewModel> Achievements { get; }
 
-        public ObservableCollection<StatViewModel> Statistics { get; }
+        public BulkObservableCollection<StatViewModel> Statistics { get; }
 
         public AsyncRelayCommand ReloadCommand { get; }
 
@@ -106,7 +107,7 @@ namespace SAM.Core.ViewModels
 
         public RelayCommand InvertAllCommand { get; }
 
-        public RelayCommand ResetAllCommand { get; }
+        public AsyncRelayCommand ResetAllCommand { get; }
 
         /// <summary>Raised with a message the shell should show as an error.</summary>
         public event Action<string> ErrorRaised;
@@ -119,12 +120,6 @@ namespace SAM.Core.ViewModels
         /// why nothing happened.
         /// </summary>
         public event Action<AchievementViewModel> ProtectedChangeRejected;
-
-        /// <summary>
-        /// Asked before stats are reset. The shell must return true only after confirming
-        /// with the user, and set whether achievements go with them.
-        /// </summary>
-        public event Func<ResetRequest, bool> ResetConfirmationRequested;
 
         public string GameName => this._Steam.AppName;
 
@@ -400,11 +395,7 @@ namespace SAM.Core.ViewModels
                 this._AllStatistics.Add(statistic);
             }
 
-            this.Statistics.Clear();
-            foreach (var statistic in this._AllStatistics)
-            {
-                this.Statistics.Add(statistic);
-            }
+            this.Statistics.ReplaceAll(this._AllStatistics);
 
             this.ApplyFilter();
             this.RaiseTotals();
@@ -418,8 +409,7 @@ namespace SAM.Core.ViewModels
             var search = this._SearchText;
             var filter = this._Filter;
 
-            this.Achievements.Clear();
-            foreach (var achievement in this._AllAchievements)
+            var achievements = this._AllAchievements.Where(achievement =>
             {
                 var wanted = filter switch
                 {
@@ -427,21 +417,12 @@ namespace SAM.Core.ViewModels
                     AchievementFilter.Unlocked => achievement.IsUnlocked == true,
                     _ => true,
                 };
+                return wanted == true && achievement.Matches(search) == true;
+            });
+            this.Achievements.ReplaceAll(achievements);
 
-                if (wanted == true && achievement.Matches(search) == true)
-                {
-                    this.Achievements.Add(achievement);
-                }
-            }
-
-            this.Statistics.Clear();
-            foreach (var statistic in this._AllStatistics)
-            {
-                if (statistic.Matches(search) == true)
-                {
-                    this.Statistics.Add(statistic);
-                }
-            }
+            var statistics = this._AllStatistics.Where(statistic => statistic.Matches(search) == true);
+            this.Statistics.ReplaceAll(statistics);
         }
 
         private void SetAll(bool unlocked)
@@ -548,15 +529,36 @@ namespace SAM.Core.ViewModels
             }
         }
 
-        private void ResetAll()
+        /// <summary>
+        /// Reproduces the three-step confirmation the tool has always asked for before a reset.
+        /// Resetting stats is not reversible.
+        /// </summary>
+        private async Task ResetAllAsync()
         {
-            var request = new ResetRequest();
-            if (this.ResetConfirmationRequested?.Invoke(request) != true)
+            var confirmed = await this._DialogService.ShowConfirmationAsync(
+                "Warning",
+                "Are you absolutely sure you want to reset stats?",
+                DialogSeverity.Warning).ConfigureAwait(true);
+            if (confirmed == false)
             {
                 return;
             }
 
-            if (this._Steam.ResetAllStats(request.IncludeAchievements) == false)
+            var includeAchievements = await this._DialogService.ShowConfirmationAsync(
+                "Question",
+                "Do you want to reset achievements too?",
+                DialogSeverity.Question).ConfigureAwait(true);
+
+            var reallySure = await this._DialogService.ShowConfirmationAsync(
+                "Warning",
+                "Really really sure?",
+                DialogSeverity.Error).ConfigureAwait(true);
+            if (reallySure == false)
+            {
+                return;
+            }
+
+            if (this._Steam.ResetAllStats(includeAchievements) == false)
             {
                 this.ErrorRaised?.Invoke("Failed to reset stats.");
                 return;
@@ -636,13 +638,5 @@ namespace SAM.Core.ViewModels
             2 => "generic error -- this usually means you don't own the game",
             _ => _($"{id}"),
         };
-    }
-
-    /// <summary>
-    /// Carries the shell's answer back from a reset confirmation.
-    /// </summary>
-    public sealed class ResetRequest
-    {
-        public bool IncludeAchievements { get; set; }
     }
 }

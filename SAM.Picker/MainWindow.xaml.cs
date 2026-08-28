@@ -38,7 +38,7 @@ namespace SAM.Picker
     public partial class MainWindow : ThemedWindow
     {
         private const int _CapsuleDecodeWidth = 228;
-        private const int _CapsuleCacheCapacity = 1200;
+        private const long _CapsuleCacheBudgetBytes = 80L * 1024 * 1024;
         private const int _MaximumConcurrentCapsuleLoads = 6;
 
         private static readonly TimeSpan _CacheRetention = TimeSpan.FromDays(90);
@@ -60,7 +60,7 @@ namespace SAM.Picker
                 throw new ArgumentNullException(nameof(library));
             }
 
-            this.Capsules = new("logos", _MaximumConcurrentCapsuleLoads, _CapsuleCacheCapacity);
+            this.Capsules = new("logos", _MaximumConcurrentCapsuleLoads, _CapsuleCacheBudgetBytes);
 
             this._Library = library;
             this._Library.LaunchRequested += this.OnLaunchRequested;
@@ -144,9 +144,12 @@ namespace SAM.Picker
 
         private void OnGameActivated(object sender, MouseButtonEventArgs e)
         {
-            if (this._GameList.SelectedItem is GameViewModel game)
+            // Routed through the command, rather than calling OnLaunchRequested directly, so
+            // CanExecute stays the one place that decides whether a launch is allowed.
+            if (this._GameList.SelectedItem is GameViewModel game &&
+                this._Library.LaunchCommand.CanExecute(game) == true)
             {
-                this.OnLaunchRequested(game);
+                this._Library.LaunchCommand.Execute(game);
             }
         }
 
@@ -159,8 +162,12 @@ namespace SAM.Picker
 
             if (this._GameList.SelectedItem is GameViewModel game)
             {
-                this.OnLaunchRequested(game);
                 e.Handled = true;
+
+                if (this._Library.LaunchCommand.CanExecute(game) == true)
+                {
+                    this._Library.LaunchCommand.Execute(game);
+                }
             }
         }
 

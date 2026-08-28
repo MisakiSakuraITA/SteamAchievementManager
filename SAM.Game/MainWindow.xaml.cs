@@ -33,7 +33,7 @@ namespace SAM.Game
     public partial class MainWindow : ThemedWindow
     {
         private const int _IconDecodeWidth = 56;
-        private const int _IconCacheCapacity = 1500;
+        private const long _IconCacheBudgetBytes = 80L * 1024 * 1024;
         private const int _MaximumConcurrentIconLoads = 6;
 
         private static readonly TimeSpan _CacheRetention = TimeSpan.FromDays(90);
@@ -44,7 +44,8 @@ namespace SAM.Game
 
         public MainWindow(ISteamStatsService steam)
             : this(new AchievementManagerViewModel(
-                steam ?? throw new ArgumentNullException(nameof(steam))))
+                steam ?? throw new ArgumentNullException(nameof(steam)),
+                new MessageBoxDialogService()))
         {
         }
 
@@ -55,13 +56,12 @@ namespace SAM.Game
                 throw new ArgumentNullException(nameof(manager));
             }
 
-            this.Icons = new("achievements", _MaximumConcurrentIconLoads, _IconCacheCapacity);
+            this.Icons = new("achievements", _MaximumConcurrentIconLoads, _IconCacheBudgetBytes);
 
             this._Manager = manager;
             this._Manager.ErrorRaised += this.OnErrorRaised;
             this._Manager.InfoRaised += this.OnInfoRaised;
             this._Manager.ProtectedChangeRejected += this.OnProtectedChangeRejected;
-            this._Manager.ResetConfirmationRequested += this.OnResetConfirmationRequested;
 
             this.InitializeComponent();
 
@@ -117,7 +117,6 @@ namespace SAM.Game
             this._Manager.ErrorRaised -= this.OnErrorRaised;
             this._Manager.InfoRaised -= this.OnInfoRaised;
             this._Manager.ProtectedChangeRejected -= this.OnProtectedChangeRejected;
-            this._Manager.ResetConfirmationRequested -= this.OnResetConfirmationRequested;
             this._Manager.Shutdown();
 
             this.Icons.Dispose();
@@ -148,37 +147,6 @@ namespace SAM.Game
                 "Error",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
-        }
-
-        /// <summary>
-        /// Reproduces the three-step confirmation the tool has always asked for before a
-        /// reset. Resetting stats is not reversible.
-        /// </summary>
-        private bool OnResetConfirmationRequested(ResetRequest request)
-        {
-            if (MessageBox.Show(
-                this,
-                "Are you absolutely sure you want to reset stats?",
-                "Warning",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning) == MessageBoxResult.No)
-            {
-                return false;
-            }
-
-            request.IncludeAchievements = MessageBox.Show(
-                this,
-                "Do you want to reset achievements too?",
-                "Question",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question) == MessageBoxResult.Yes;
-
-            return MessageBox.Show(
-                this,
-                "Really really sure?",
-                "Warning",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Error) == MessageBoxResult.Yes;
         }
     }
 }
