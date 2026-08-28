@@ -316,6 +316,8 @@ namespace SAM.Core.ViewModels
 
             try
             {
+                // Load sets IsBusy false and reports the resulting count itself, on every
+                // path that reaches it -- including a direct call from outside this method.
                 this.Load(schema);
             }
             catch (Exception e)
@@ -323,11 +325,7 @@ namespace SAM.Core.ViewModels
                 this.IsBusy = false;
                 this.Status = "Error when handling stats retrieval.";
                 this.ErrorRaised?.Invoke("Error when handling stats retrieval:\n" + e.Message);
-                return;
             }
-
-            this.IsBusy = false;
-            this.Status = _($"Retrieved {this._AllAchievements.Count} achievements and {this._AllStatistics.Count} statistics.");
         }
 
         /// <summary>
@@ -450,6 +448,7 @@ namespace SAM.Core.ViewModels
 
             // Having data is what ends the wait, whichever route the schema arrived by.
             this.IsBusy = false;
+            this.UpdateStatus();
         }
 
         private void ApplyFilter()
@@ -471,6 +470,31 @@ namespace SAM.Core.ViewModels
 
             var statistics = this._AllStatistics.Where(statistic => statistic.Matches(search) == true);
             this.Statistics.ReplaceAll(statistics);
+
+            // A load still in flight has its own progress text to show; this only takes over
+            // once there is a finished list for the count to describe.
+            if (this._IsBusy == false)
+            {
+                this.UpdateStatus();
+            }
+        }
+
+        /// <summary>
+        /// Reports how many of the loaded achievements the current search and filter are
+        /// actually showing, mirroring the picker's own idle status.
+        /// </summary>
+        private void UpdateStatus()
+        {
+            if (this._IsSteamConnected == false)
+            {
+                // A lost connection outranks any count; filtering must not overwrite it.
+                this.Status = _DisconnectedMessage;
+                return;
+            }
+
+            this.Status = this._AllAchievements.Count == 0
+                ? "No achievements found."
+                : _($"Showing {this.Achievements.Count:N0} of {this._AllAchievements.Count:N0} achievements.");
         }
 
         private void SetAll(bool unlocked)

@@ -27,7 +27,7 @@ using Microsoft.Win32.SafeHandles;
 
 namespace SAM.API
 {
-    internal class NativeStrings
+    internal static class NativeStrings
     {
         // Steam never hands back anything remotely close to this for the strings this class
         // reads (language codes, country codes, achievement display text); it exists purely

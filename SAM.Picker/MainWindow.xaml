@@ -9,7 +9,8 @@
                  Icon="pack://application:,,,/SAM.Picker;component/SAM.ico"
                  Width="1080" Height="720"
                  MinWidth="640" MinHeight="420"
-                 WindowStartupLocation="CenterScreen">
+                 WindowStartupLocation="CenterScreen"
+                 PreviewKeyDown="OnWindowPreviewKeyDown">
 
     <Window.Resources>
         <conv:BooleanToVisibilityConverter x:Key="BoolToVisible" />
@@ -109,6 +110,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -129,9 +131,13 @@
             </StackPanel>
         </Border>
 
+        <!-- ============================ notification ============================ -->
+
+        <controls:NotificationBanner x:Name="_Notification" Grid.Row="1" />
+
         <!-- ============================ toolbar ============================ -->
 
-        <Border Grid.Row="1"
+        <Border Grid.Row="2"
                 Background="{StaticResource Brush.Bg.Surface}"
                 BorderBrush="{StaticResource Brush.Border.Subtle}"
                 BorderThickness="0,0,0,1"
@@ -211,6 +217,7 @@
                     <Button Margin="6,0,0,0"
                             Padding="9,6"
                             ToolTip="Show only this app id"
+                            AutomationProperties.Name="Show only this app id"
                             Command="{Binding AddGameCommand}"
                             CommandParameter="{Binding Text, ElementName=_AddGameBox}">
                         <Path Style="{StaticResource Icon.Stroked}" Data="{StaticResource Icon.Plus}" />
@@ -222,7 +229,7 @@
                             <Path Style="{StaticResource Icon.Stroked}"
                                   Data="{StaticResource Icon.Refresh}"
                                   Stroke="{StaticResource Brush.Text.OnAccent}" />
-                            <TextBlock Margin="7,0,0,0" Text="Refresh" />
+                            <AccessText Margin="7,0,0,0" Text="_Refresh" />
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -231,7 +238,7 @@
 
         <!-- ============================ library ============================ -->
 
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="3">
             <ListBox x:Name="_GameList"
                      Background="Transparent"
                      BorderThickness="0"
@@ -297,7 +304,7 @@
 
         <!-- ============================ status ============================ -->
 
-        <Border Grid.Row="3"
+        <Border Grid.Row="4"
                 Background="{StaticResource Brush.Bg.Surface}"
                 BorderBrush="{StaticResource Brush.Border.Subtle}"
                 BorderThickness="0,1,0,0"
@@ -321,6 +328,7 @@
                            Style="{StaticResource Text.Secondary}"
                            VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis"
+                           AutomationProperties.LiveSetting="Polite"
                            Text="{Binding Status}" />
 
                 <Button Grid.Column="2"
@@ -332,7 +340,7 @@
                               Width="11" Height="11"
                               Data="{StaticResource Icon.Play}"
                               Fill="{StaticResource Brush.Accent}" />
-                        <TextBlock Margin="7,0,0,0" Text="Manage achievements" />
+                        <AccessText Margin="7,0,0,0" Text="_Manage achievements" />
                     </StackPanel>
                 </Button>
             </Grid>

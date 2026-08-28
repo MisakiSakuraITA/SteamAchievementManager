@@ -173,9 +173,15 @@ namespace SAM.UI.Controls
             }
         }
 
+        /// <summary>
+        /// Part of <see cref="IScrollInfo"/>; <paramref name="offset"/> is intentionally
+        /// ignored. The panel wraps its content to the available width, so there is never
+        /// anything to its left or right to scroll to -- the horizontal offset is always 0,
+        /// and this only resets it back to 0 on the rare occasion something (a stale
+        /// <see cref="ScrollOwner"/> reapplying an old offset, say) has left it otherwise.
+        /// </summary>
         public void SetHorizontalOffset(double offset)
         {
-            // The panel wraps, so there is never anything to scroll to horizontally.
             if (this._Offset.X.Equals(0.0) == false)
             {
                 this._Offset.X = 0;

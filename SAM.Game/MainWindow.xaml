@@ -9,7 +9,8 @@
                  Icon="pack://application:,,,/SAM.Game;component/SAM.ico"
                  Width="1120" Height="760"
                  MinWidth="720" MinHeight="480"
-                 WindowStartupLocation="CenterScreen">
+                 WindowStartupLocation="CenterScreen"
+                 PreviewKeyDown="OnWindowPreviewKeyDown">
 
     <Window.Resources>
         <conv:BooleanToVisibilityConverter x:Key="BoolToVisible" />
@@ -124,7 +125,8 @@
                     <CheckBox Grid.Column="2"
                               VerticalAlignment="Top"
                               IsChecked="{Binding IsUnlocked, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                              ToolTip="Unlock this achievement on the next store">
+                              ToolTip="Unlock this achievement on the next store"
+                              AutomationProperties.Name="{Binding Name, StringFormat={}Unlock {0}}">
                         <CheckBox.Style>
                             <Style TargetType="{x:Type CheckBox}" BasedOn="{StaticResource {x:Type CheckBox}}">
                                 <Setter Property="IsEnabled" Value="{Binding IsProtected, Converter={StaticResource Not}}" />
@@ -226,6 +228,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -246,9 +249,13 @@
             </StackPanel>
         </Border>
 
+        <!-- ============================ notification ============================ -->
+
+        <controls:NotificationBanner x:Name="_Notification" Grid.Row="1" />
+
         <!-- ============================ header ============================ -->
 
-        <Border Grid.Row="1"
+        <Border Grid.Row="2"
                 Background="{StaticResource Brush.Bg.Surface}"
                 Padding="18,14,18,12">
             <Grid>
@@ -291,8 +298,8 @@
 
         <!-- ============================ tabs ============================ -->
 
-        <TabControl Grid.Row="2">
-            <TabItem Header="Achievements">
+        <TabControl Grid.Row="3">
+            <TabItem Header="_Achievements">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -314,7 +321,8 @@
                             </Grid.ColumnDefinitions>
 
                             <Grid Grid.Column="0" MinWidth="210">
-                                <TextBox Padding="32,5,10,5"
+                                <TextBox x:Name="_SearchBox"
+                                         Padding="32,5,10,5"
                                          Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
                                 <Path Style="{StaticResource Icon.Stroked}"
                                       Margin="10,0,0,0"
@@ -348,16 +356,19 @@
                                 <Button Command="{Binding UnlockAllCommand}" ToolTip="Mark every listed achievement unlocked">
                                     <StackPanel Orientation="Horizontal">
                                         <Path Style="{StaticResource Icon.Stroked}" Data="{StaticResource Icon.Unlock}" />
-                                        <TextBlock Margin="7,0,0,0" Text="Unlock all" />
+                                        <AccessText Margin="7,0,0,0" Text="_Unlock all" />
                                     </StackPanel>
                                 </Button>
                                 <Button Margin="6,0,0,0" Command="{Binding LockAllCommand}" ToolTip="Mark every listed achievement locked">
                                     <StackPanel Orientation="Horizontal">
                                         <Path Style="{StaticResource Icon.Stroked}" Data="{StaticResource Icon.Lock}" />
-                                        <TextBlock Margin="7,0,0,0" Text="Lock all" />
+                                        <AccessText Margin="7,0,0,0" Text="_Lock all" />
                                     </StackPanel>
                                 </Button>
-                                <Button Margin="6,0,0,0" Command="{Binding InvertAllCommand}" ToolTip="Flip every listed achievement">
+                                <Button Margin="6,0,0,0"
+                                        Command="{Binding InvertAllCommand}"
+                                        ToolTip="Flip every listed achievement"
+                                        AutomationProperties.Name="Flip every listed achievement">
                                     <Path Style="{StaticResource Icon.Stroked}" Data="{StaticResource Icon.Invert}" />
                                 </Button>
                             </StackPanel>
@@ -370,7 +381,8 @@
                              ItemsSource="{Binding Achievements}"
                              ItemTemplate="{StaticResource AchievementCardTemplate}"
                              ItemContainerStyle="{StaticResource ListBoxItem.Row}"
-                             ScrollViewer.CanContentScroll="True">
+                             ScrollViewer.CanContentScroll="True"
+                             KeyboardNavigation.DirectionalNavigation="Contained">
                         <ListBox.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <!-- VirtualizationMode is declared here, on the panel itself,
@@ -387,7 +399,7 @@
                 </Grid>
             </TabItem>
 
-            <TabItem Header="Statistics">
+            <TabItem Header="Statis_tics">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -412,7 +424,7 @@
                                     <Path Style="{StaticResource Icon.Stroked}"
                                           Data="{StaticResource Icon.Reset}"
                                           Stroke="{StaticResource Brush.Danger}" />
-                                    <TextBlock Margin="7,0,0,0" Text="Reset all stats" />
+                                    <AccessText Margin="7,0,0,0" Text="R_eset all stats" />
                                 </StackPanel>
                             </Button>
                         </Grid>
@@ -423,14 +435,15 @@
                              Padding="14,10"
                              ItemsSource="{Binding Statistics}"
                              ItemTemplate="{StaticResource StatisticRowTemplate}"
-                             ItemContainerStyle="{StaticResource ListBoxItem.Row}" />
+                             ItemContainerStyle="{StaticResource ListBoxItem.Row}"
+                             KeyboardNavigation.DirectionalNavigation="Contained" />
                 </Grid>
             </TabItem>
         </TabControl>
 
         <!-- ============================ status ============================ -->
 
-        <Border Grid.Row="3"
+        <Border Grid.Row="4"
                 Background="{StaticResource Brush.Bg.Surface}"
                 BorderBrush="{StaticResource Brush.Border.Subtle}"
                 BorderThickness="0,1,0,0"
@@ -455,6 +468,7 @@
                            Style="{StaticResource Text.Secondary}"
                            VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis"
+                           AutomationProperties.LiveSetting="Polite"
                            Text="{Binding Status}" />
 
                 <StackPanel Grid.Column="2"
@@ -476,7 +490,7 @@
                     <Button Style="{StaticResource Button.Ghost}" Command="{Binding ReloadCommand}">
                         <StackPanel Orientation="Horizontal">
                             <Path Style="{StaticResource Icon.Stroked}" Data="{StaticResource Icon.Refresh}" />
-                            <TextBlock Margin="7,0,0,0" Text="Reload" />
+                            <AccessText Margin="7,0,0,0" Text="_Reload" />
                         </StackPanel>
                     </Button>
                     <Button Margin="8,0,0,0"
@@ -486,7 +500,7 @@
                             <Path Style="{StaticResource Icon.Stroked}"
                                   Data="{StaticResource Icon.Save}"
                                   Stroke="{StaticResource Brush.Text.OnAccent}" />
-                            <TextBlock Margin="7,0,0,0" Text="Store changes" />
+                            <AccessText Margin="7,0,0,0" Text="_Store changes" />
                         </StackPanel>
                     </Button>
                 </StackPanel>

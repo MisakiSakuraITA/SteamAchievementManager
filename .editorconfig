@@ -1,0 +1,42 @@
+# Top-most EditorConfig file.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.cs]
+# 'this.' qualifies every instance member access throughout the codebase.
+dotnet_style_qualification_for_field = true:suggestion
+dotnet_style_qualification_for_property = true:suggestion
+dotnet_style_qualification_for_method = true:suggestion
+dotnet_style_qualification_for_event = true:suggestion
+
+# var is used freely elsewhere in the codebase; kept as a suggestion rather than a rule.
+csharp_style_var_for_built_in_types = true:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = true:suggestion
+
+# Braces are always used, even for a single-line body.
+csharp_prefer_braces = true:suggestion
+
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_indent_case_contents = true
+csharp_indent_switch_labels = true
+csharp_space_after_keywords_in_control_flow_statements = true
+
+[*.{xaml,xml,csproj,props,targets,config}]
+indent_size = 4
+
+[*.json]
+indent_size = 2
+
+[*.{md,yml}]
+trim_trailing_whitespace = false

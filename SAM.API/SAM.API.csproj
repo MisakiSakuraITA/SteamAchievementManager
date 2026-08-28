@@ -1,29 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <AssemblyTitle>Steam Achievement Manager API</AssemblyTitle>
-    <Company>Gibbed</Company>
-    <Authors>Gibbed</Authors>
     <Description>The Steam client interop layer for the Steam Achievement Manager.</Description>
-    <Copyright>Copyright © Gibbed 2019</Copyright>
   </PropertyGroup>
   <PropertyGroup>
-    <Version>7.0.0</Version>
-    <AssemblyVersion>7.0.0.0</AssemblyVersion>
-    <FileVersion>7.0.0.0</FileVersion>
-  </PropertyGroup>
-  <PropertyGroup>
-    <RepositoryUrl>https://github.com/gibbed/SteamAchievementManager/</RepositoryUrl>
-    <RepositoryType>Git</RepositoryType>
-  </PropertyGroup>
-  <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <LangVersion>12.0</LangVersion>
-    <Nullable>disable</Nullable>
-    <Platforms>x86</Platforms>
-    <PlatformTarget>x86</PlatformTarget>
+    <!-- steamclient.dll's exports are unmanaged, so the interop layer that calls them needs
+         pointer arithmetic the rest of the solution has no reason to allow. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <!-- steamclient.dll exports 32-bit thiscall member functions; the whole stack is
-         pinned to x86 because of it. -->
-    <SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
   </PropertyGroup>
 </Project>

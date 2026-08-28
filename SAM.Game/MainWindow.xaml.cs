@@ -22,10 +22,12 @@
 
 using System;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Threading;
 using SAM.Core.Steam;
 using SAM.Core.ViewModels;
 using SAM.UI;
+using SAM.UI.Controls;
 using SAM.UI.Imaging;
 
 namespace SAM.Game
@@ -134,22 +136,83 @@ namespace SAM.Game
 
         private void OnErrorRaised(string message)
         {
-            MessageBox.Show(this, message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            // Every ErrorRaised the manager sends today traces back to (re)loading or
+            // storing, so offering to reload is a reasonable default even for the rarer
+            // message where it does not undo the specific failure -- a store failure has
+            // already reverted the pending edit that failed by the time this fires, so
+            // reloading here is harmless rather than a genuine retry of the store itself.
+            this.ShowNotification(message, NotificationSeverity.Error, this._Manager.ReloadCommand);
         }
 
         private void OnInfoRaised(string message)
         {
-            MessageBox.Show(this, message, "Information", MessageBoxButton.OK, MessageBoxImage.Information);
+            this.ShowNotification(message, NotificationSeverity.Success, null);
         }
 
         private void OnProtectedChangeRejected(AchievementViewModel achievement)
         {
-            MessageBox.Show(
-                this,
+            this.ShowNotification(
                 "Sorry, but this is a protected achievement and cannot be managed with Steam Achievement Manager.",
-                "Error",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+                NotificationSeverity.Warning,
+                null);
+        }
+
+        private void ShowNotification(string message, NotificationSeverity severity, ICommand retry)
+        {
+            this._Notification.Message = message;
+            this._Notification.Severity = severity;
+            this._Notification.RetryCommand = retry;
+            this._Notification.IsOpen = true;
+        }
+
+        /// <summary>
+        /// Window-wide shortcuts. Handled on the tunnelling Preview pass so they work no
+        /// matter which control currently has focus, rather than only when the element that
+        /// would otherwise see the key first happens to be the one that cares about it.
+        /// </summary>
+        private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (this.HandleShortcut(e.Key, Keyboard.Modifiers) == true)
+            {
+                e.Handled = true;
+            }
+        }
+
+        /// <summary>
+        /// The shortcut logic itself, separated from the event handler so it can be exercised
+        /// with an explicit modifier set rather than needing Keyboard.Modifiers' real keyboard
+        /// state, which nothing outside an actual keypress can fake.
+        /// </summary>
+        private bool HandleShortcut(Key key, ModifierKeys modifiers)
+        {
+            switch (key)
+            {
+                case Key.F when modifiers == ModifierKeys.Control:
+                    this._SearchBox.Focus();
+                    this._SearchBox.SelectAll();
+                    return true;
+
+                case Key.Escape when string.IsNullOrEmpty(this._Manager.SearchText) == false:
+                    this._Manager.SearchText = "";
+                    return true;
+
+                case Key.F5:
+                    if (this._Manager.ReloadCommand.CanExecute(null) == true)
+                    {
+                        this._Manager.ReloadCommand.Execute(null);
+                    }
+                    return true;
+
+                case Key.S when modifiers == ModifierKeys.Control:
+                    if (this._Manager.StoreCommand.CanExecute(null) == true)
+                    {
+                        this._Manager.StoreCommand.Execute(null);
+                    }
+                    return true;
+
+                default:
+                    return false;
+            }
         }
     }
 }

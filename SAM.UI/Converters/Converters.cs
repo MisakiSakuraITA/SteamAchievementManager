@@ -106,29 +106,4 @@ namespace SAM.UI.Converters
             return enumType.IsEnum == true ? Enum.Parse(enumType, name) : Binding.DoNothing;
         }
     }
-
-    /// <summary>Multiplies a 0-100 percentage by a bound width, for inline meters.</summary>
-    public sealed class PercentageToWidthConverter : IMultiValueConverter
-    {
-        public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (values == null || values.Length < 2 ||
-                values[0] is double percentage == false ||
-                values[1] is double width == false)
-            {
-                return 0d;
-            }
-
-            if (double.IsNaN(width) == true || double.IsInfinity(width) == true || width <= 0)
-            {
-                return 0d;
-            }
-
-            var clamped = percentage < 0 ? 0 : (percentage > 100 ? 100 : percentage);
-            return width * clamped / 100d;
-        }
-
-        public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
-            => throw new NotSupportedException();
-    }
 }

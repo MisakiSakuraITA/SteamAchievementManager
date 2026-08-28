@@ -31,6 +31,7 @@ using SAM.Core.Steam;
 using SAM.Core.Threading;
 using SAM.Core.ViewModels;
 using SAM.UI;
+using SAM.UI.Controls;
 using SAM.UI.Imaging;
 
 namespace SAM.Picker
@@ -132,17 +133,31 @@ namespace SAM.Picker
             }
             catch (Win32Exception)
             {
-                this.OnErrorRaised("Failed to start SAM.Game.exe.");
+                // Nothing sensible to retry here: relaunching the picker's own refresh would
+                // not touch whatever kept SAM.Game.exe from starting.
+                this.ShowNotification("Failed to start SAM.Game.exe.", NotificationSeverity.Error, null);
             }
             catch (System.IO.FileNotFoundException)
             {
-                this.OnErrorRaised("Failed to start SAM.Game.exe.");
+                this.ShowNotification("Failed to start SAM.Game.exe.", NotificationSeverity.Error, null);
             }
         }
 
         private void OnErrorRaised(string message)
         {
-            MessageBox.Show(this, message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            // Every ErrorRaised from the library today traces back to (re)loading the
+            // catalogue or checking ownership, so offering to try that again is a reasonable
+            // default even for the rarer validation-style messages, where it is merely a
+            // harmless no-op instead of a genuine fix.
+            this.ShowNotification(message, NotificationSeverity.Error, this._Library.RefreshCommand);
+        }
+
+        private void ShowNotification(string message, NotificationSeverity severity, ICommand retry)
+        {
+            this._Notification.Message = message;
+            this._Notification.Severity = severity;
+            this._Notification.RetryCommand = retry;
+            this._Notification.IsOpen = true;
         }
 
         private void OnGameActivated(object sender, MouseButtonEventArgs e)
@@ -183,6 +198,56 @@ namespace SAM.Picker
 
             this._Library.AddGameCommand.Execute(this._AddGameBox.Text);
             e.Handled = true;
+        }
+
+        /// <summary>
+        /// Window-wide shortcuts. Handled on the tunnelling Preview pass so they work no
+        /// matter which control currently has focus, rather than only when the element that
+        /// would otherwise see the key first happens to be the one that cares about it.
+        /// </summary>
+        private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (this.HandleShortcut(e.Key, Keyboard.Modifiers) == true)
+            {
+                e.Handled = true;
+            }
+        }
+
+        /// <summary>
+        /// The shortcut logic itself, separated from the event handler so it can be exercised
+        /// with an explicit modifier set rather than needing Keyboard.Modifiers' real keyboard
+        /// state, which nothing outside an actual keypress can fake.
+        /// </summary>
+        private bool HandleShortcut(Key key, ModifierKeys modifiers)
+        {
+            switch (key)
+            {
+                case Key.F when modifiers == ModifierKeys.Control:
+                    this._SearchBox.Focus();
+                    this._SearchBox.SelectAll();
+                    return true;
+
+                case Key.Escape when string.IsNullOrEmpty(this._Library.SearchText) == false:
+                    this._Library.SearchText = "";
+                    return true;
+
+                case Key.F5:
+                    if (this._Library.RefreshCommand.CanExecute(null) == true)
+                    {
+                        this._Library.RefreshCommand.Execute(null);
+                    }
+                    return true;
+
+                case Key.Enter when modifiers == ModifierKeys.Control:
+                    if (this._Library.LaunchCommand.CanExecute(null) == true)
+                    {
+                        this._Library.LaunchCommand.Execute(null);
+                    }
+                    return true;
+
+                default:
+                    return false;
+            }
         }
     }
 }

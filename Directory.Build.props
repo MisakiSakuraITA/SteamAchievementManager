@@ -1,0 +1,31 @@
+<Project>
+  <!--
+      Properties every project in the solution shares. A project overrides one of these by
+      simply setting it again in its own .csproj: MSBuild evaluates this file first, so a
+      later assignment in the project itself always wins.
+  -->
+  <PropertyGroup>
+    <Company>Gibbed</Company>
+    <Authors>Gibbed</Authors>
+    <Copyright>Copyright © Gibbed 2019</Copyright>
+    <RepositoryUrl>https://github.com/gibbed/SteamAchievementManager/</RepositoryUrl>
+    <RepositoryType>Git</RepositoryType>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Version>7.0.0</Version>
+    <AssemblyVersion>7.0.0.0</AssemblyVersion>
+    <FileVersion>7.0.0.0</FileVersion>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <Platforms>x86</Platforms>
+    <PlatformTarget>x86</PlatformTarget>
+    <!-- steamclient.dll exports 32-bit thiscall member functions; the whole stack is pinned
+         to x86 because of it. -->
+    <SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
+  </PropertyGroup>
+</Project>

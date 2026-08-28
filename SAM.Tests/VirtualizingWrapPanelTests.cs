@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using SAM.Core.Steam;
 using SAM.Core.Steam.Schema;
@@ -406,6 +407,96 @@ namespace SAM.Tests
                 Assert.True(
                     panel.VerticalOffset <= Math.Max(0, panel.ExtentHeight - panel.ViewportHeight) + 0.5,
                     $"offset={panel.VerticalOffset} extent={panel.ExtentHeight} viewport={panel.ViewportHeight}");
+
+                window.Close();
+                WpfTestFixture.Pump();
+            });
+        }
+
+        [Fact]
+        public void ArrowKeysWalkTheAchievementListPastTheInitiallyRealizedRange()
+        {
+            this._Fixture.Invoke(() =>
+            {
+                FakeStats steam = new() { AppId = 480, AppName = "Test", InstallPath = null };
+                var definitions = new List<AchievementDefinition>();
+                for (int i = 0; i < 200; i++)
+                {
+                    var id = $"ACH_{i:D3}";
+                    steam.SeedAchievement(id, false);
+                    definitions.Add(new() { Id = id, Name = "A" + i, Description = "D" + i, Permission = 0 });
+                }
+
+                AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+                manager.Load(new UserGameStatsSchema(definitions, Array.Empty<StatDefinition>()));
+
+                var window = new SAM.Game.MainWindow(manager)
+                {
+                    WindowStartupLocation = WindowStartupLocation.Manual,
+                    ShowInTaskbar = false,
+                    Left = -32000,
+                    Top = -32000,
+                    Width = 1120,
+                    Height = 760,
+                };
+                window.Show();
+                WpfTestFixture.Pump();
+                WpfTestFixture.Pump();
+
+                var list = FindChild<ListBox>(window);
+                var panel = FindChild<VirtualizingWrapPanel>(window);
+                Assert.NotNull(list);
+                Assert.NotNull(panel);
+
+                // The highest-indexed row currently realized: the one keypress under test
+                // only has to cross from here into a row the panel has not realized yet,
+                // rather than needing many presses (and many chances for the synthetic input
+                // below to race the layout it triggers) to get there from the top.
+                var lastRealizedIndex = panel.Children.OfType<FrameworkElement>()
+                    .Select(e => e.DataContext)
+                    .OfType<AchievementViewModel>()
+                    .Select(a => int.Parse(a.Id.Substring(4)))
+                    .Max();
+                var initiallyRealized = panel.Children.OfType<FrameworkElement>()
+                    .Select(e => e.DataContext)
+                    .OfType<AchievementViewModel>()
+                    .Select(a => a.Id)
+                    .ToHashSet();
+
+                var lastContainer = list.ItemContainerGenerator.ContainerFromIndex(lastRealizedIndex) as ListBoxItem;
+                Assert.NotNull(lastContainer);
+                lastContainer.Focus();
+                WpfTestFixture.Pump();
+                Assert.True(lastContainer.IsKeyboardFocused);
+
+                var source = PresentationSource.FromVisual(window);
+                Assert.NotNull(source);
+
+                // A real key event exercises the same path an actual keypress would, rather
+                // than a shortcut that only proves focus itself is capable of moving.
+                var args = new KeyEventArgs(Keyboard.PrimaryDevice, source, 0, Key.Down)
+                {
+                    RoutedEvent = Keyboard.KeyDownEvent,
+                };
+                lastContainer.RaiseEvent(args);
+
+                // A newly-focused container that was virtualized away a moment ago needs a
+                // full measure/arrange pass to actually come into existence.
+                WpfTestFixture.Pump();
+                WpfTestFixture.Pump();
+
+                var focusedElement = Keyboard.FocusedElement as FrameworkElement;
+                Assert.NotNull(focusedElement);
+                var focusedAchievement = focusedElement.DataContext as AchievementViewModel;
+                Assert.NotNull(focusedAchievement);
+
+                // Genuinely moved past the range that was realized before the keypress.
+                Assert.DoesNotContain(focusedAchievement.Id, initiallyRealized);
+
+                // The view followed: the newly focused row is realized into the visual tree,
+                // and the panel actually scrolled to bring it into view.
+                Assert.Contains(focusedElement, panel.Children.OfType<FrameworkElement>());
+                Assert.True(panel.VerticalOffset > 0);
 
                 window.Close();
                 WpfTestFixture.Pump();

@@ -60,6 +60,52 @@ namespace SAM.Tests
         }
 
         [Fact]
+        public void StatusReportsHowManyOfTheLoadedAchievementsAreCurrentlyShown()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(BuildSchema(steam));
+
+            Assert.Equal("Showing 3 of 3 achievements.", manager.Status);
+
+            manager.SearchText = "alph";
+            Assert.Equal("Showing 1 of 3 achievements.", manager.Status);
+
+            manager.SearchText = "";
+            manager.Filter = AchievementFilter.Unlocked;
+            Assert.Equal("Showing 1 of 3 achievements.", manager.Status);
+
+            manager.SearchText = "nothing matches this";
+            Assert.Equal("Showing 0 of 3 achievements.", manager.Status);
+        }
+
+        [Fact]
+        public void StatusReportsNoAchievementsFoundForAnEmptySchema()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(new UserGameStatsSchema(Enumerable.Empty<AchievementDefinition>(), Enumerable.Empty<StatDefinition>()));
+
+            Assert.Equal("No achievements found.", manager.Status);
+        }
+
+        [Fact]
+        public void DisconnectingOutranksTheSearchStatusEvenAfterAFilterChange()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(BuildSchema(steam));
+
+            steam.SimulateDisconnect();
+            Assert.Equal(manager.DisconnectedMessage, manager.Status);
+
+            // Filtering after a disconnect must not silently paper back over the banner-
+            // adjacent message with a count as if nothing were wrong.
+            manager.SearchText = "alph";
+            Assert.Equal(manager.DisconnectedMessage, manager.Status);
+        }
+
+        [Fact]
         public void FilterAndSearchNarrowTheAchievementList()
         {
             FakeStats steam = new() { InstallPath = null };
