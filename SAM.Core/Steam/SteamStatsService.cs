@@ -115,6 +115,15 @@ namespace SAM.Core.Steam
                 return;
             }
 
+            // This callback arrives on the shared global-user pipe for whichever app just
+            // asked Steam for its stats, not only for this one. A game running alongside SAM
+            // requesting its own stats would otherwise be indistinguishable from SAM's own
+            // request and trigger a reload here too.
+            if (param.GameId != this._AppId)
+            {
+                return;
+            }
+
             this.UserStatsReceived?.Invoke(param.Result);
         }
 

@@ -199,6 +199,70 @@ namespace SAM.Tests
         }
 
         [Fact]
+        public void UnsolicitedReloadPreservesAPendingAchievementUnlock()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            var schema = BuildSchema(steam);
+            manager.Load(schema);
+
+            // The user stages an unlock, then Steam redelivers stats on its own -- another
+            // app's request landing on the shared pipe, say -- reloading before the user
+            // ever gets to store.
+            manager.Achievements.First(a => a.Id == "ACH_A").IsUnlocked = true;
+            Assert.True(manager.IsModified);
+
+            manager.Load(schema);
+
+            Assert.True(manager.Achievements.First(a => a.Id == "ACH_A").IsUnlocked);
+            Assert.True(manager.IsModified);
+        }
+
+        [Fact]
+        public void ReloadDoesNotForceAPendingEditOntoAnAchievementNowProtected()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            steam.SeedAchievement("ACH_A", false);
+            var definitions = new List<AchievementDefinition>
+            {
+                new() { Id = "ACH_A", Name = "Alpha", Description = "first", Permission = 0 },
+            };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(new UserGameStatsSchema(definitions, Enumerable.Empty<StatDefinition>()));
+
+            manager.Achievements[0].IsUnlocked = true;
+            Assert.True(manager.IsModified);
+
+            // The reloaded schema now marks the same achievement protected -- the pending
+            // unlock must be dropped, not forced through as it would be for a fresh edit.
+            var reprotected = new List<AchievementDefinition>
+            {
+                new() { Id = "ACH_A", Name = "Alpha", Description = "first", Permission = 1 },
+            };
+            manager.Load(new UserGameStatsSchema(reprotected, Enumerable.Empty<StatDefinition>()));
+
+            Assert.False(manager.Achievements[0].IsUnlocked);
+            Assert.False(manager.IsModified);
+        }
+
+        [Fact]
+        public void UnsolicitedReloadPreservesAPendingStatisticEdit()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            var schema = BuildSchema(steam);
+            manager.Load(schema);
+
+            manager.Statistics[0].ValueText = "55";
+            Assert.True(manager.IsModified);
+
+            manager.Load(schema);
+
+            Assert.Equal("55", manager.Statistics[0].ValueText);
+            Assert.True(manager.IsModified);
+        }
+
+        [Fact]
         public void DisconnectGatesEveryCommandAndClearsBusyState()
         {
             FakeStats steam = new() { InstallPath = null };

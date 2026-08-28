@@ -39,6 +39,17 @@ namespace SAM.UI.Controls
     /// <see cref="ItemWidth"/> by <see cref="ItemHeight"/>, which is what makes the row
     /// arithmetic exact and lets the panel scroll to any offset without measuring the items
     /// in between.
+    ///
+    /// This panel always removes and regenerates containers outside the visible range rather
+    /// than recycling them, regardless of what <c>VirtualizingPanel.VirtualizationMode</c> a
+    /// host requests -- container reuse would need a recycle pool the way
+    /// <c>VirtualizingStackPanel</c> keeps one, which nothing here needs badly enough to
+    /// justify the bookkeeping. It also never reads <c>VirtualizingPanel.ScrollUnit</c>; its
+    /// own <see cref="IScrollInfo"/> offsets are always pixels. A list that hosts this panel
+    /// should declare <c>VirtualizingPanel.VirtualizationMode="Standard"</c> directly on the
+    /// panel element inside its <c>ItemsPanelTemplate</c>, so the setting travels with the
+    /// panel rather than depending on whichever list style happens to be applied to the
+    /// <c>ListBox</c> around it.
     /// </remarks>
     public class VirtualizingWrapPanel : VirtualizingPanel, IScrollInfo
     {

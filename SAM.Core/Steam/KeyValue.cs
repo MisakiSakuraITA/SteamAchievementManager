@@ -34,6 +34,13 @@ namespace SAM.Core.Steam
     {
         private const long _MaximumSchemaLength = 64 * 1024 * 1024;
 
+        // Real schemas nest a handful of levels deep (app id, "stats", each entry, "display",
+        // language). This is far beyond any of that and exists only to turn a maliciously or
+        // corruptly deep chain of None nodes into a clean parse failure instead of a
+        // StackOverflowException, which .NET cannot catch and would take the whole process
+        // down with it.
+        private const int _MaximumNestingDepth = 128;
+
         private static readonly KeyValue _Invalid = new();
         public string Name = "<root>";
         public KeyValueType Type = KeyValueType.None;
@@ -239,8 +246,24 @@ namespace SAM.Core.Steam
             }
         }
 
+        /// <summary>
+        /// Only the outermost call can meaningfully ask whether the whole stream was
+        /// consumed -- a nested node's own read always stops well short of the end of the
+        /// buffer, at whatever byte its enclosing level continues from. That check belongs
+        /// here, once, rather than at every recursion depth.
+        /// </summary>
         public bool ReadAsBinary(Stream input)
         {
+            return this.ReadAsBinary(input, 0) && input.Position == input.Length;
+        }
+
+        private bool ReadAsBinary(Stream input, int depth)
+        {
+            if (depth > _MaximumNestingDepth)
+            {
+                return false;
+            }
+
             this.Children = new();
             try
             {
@@ -263,7 +286,14 @@ namespace SAM.Core.Steam
                     {
                         case KeyValueType.None:
                         {
-                            current.ReadAsBinary(input);
+                            // The depth limit only bites here, but a failure at any depth has
+                            // to unwind every level above it rather than being treated as an
+                            // empty child -- otherwise parsing would carry on from a stream
+                            // position the format never actually reached.
+                            if (current.ReadAsBinary(input, depth + 1) == false)
+                            {
+                                return false;
+                            }
                             break;
                         }
 
@@ -329,7 +359,7 @@ namespace SAM.Core.Steam
                 }
 
                 this.Valid = true;
-                return input.Position == input.Length;
+                return true;
             }
             catch (Exception)
             {

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -348,6 +349,90 @@ namespace SAM.Tests
                 Assert.True(
                     panel.VerticalOffset <= Math.Max(0, panel.ExtentHeight - panel.ViewportHeight) + 0.5,
                     $"offset={panel.VerticalOffset} extent={panel.ExtentHeight} viewport={panel.ViewportHeight}");
+
+                window.Close();
+                WpfTestFixture.Pump();
+            });
+        }
+
+        [Fact]
+        public void AchievementsWrapPanelDeclaresStandardVirtualizationOnItself()
+        {
+            // VirtualizingPanel.VirtualizationMode is not an inherited property: a style
+            // setter on the hosting ListBox is what VirtualizingStackPanel itself resolves
+            // internally, but it never reaches a value read directly off the panel instance --
+            // only a value actually set on the panel does. So this checks the one thing the
+            // fix is actually responsible for: the wrap panel carries its own local value,
+            // matching what it actually does, rather than reporting the framework default and
+            // leaving that to be inferred from ListBox.Plain.
+            this._Fixture.Invoke(() =>
+            {
+                FakeStats steam = new() { AppId = 480, AppName = "Test", InstallPath = null };
+                var definitions = new List<AchievementDefinition>
+                {
+                    new() { Id = "ACH_A", Name = "A", Description = "", Permission = 0 },
+                };
+                AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+                manager.Load(new UserGameStatsSchema(definitions, Array.Empty<StatDefinition>()));
+
+                var window = new SAM.Game.MainWindow(manager)
+                {
+                    WindowStartupLocation = WindowStartupLocation.Manual,
+                    ShowInTaskbar = false,
+                    Left = -32000,
+                    Top = -32000,
+                };
+                window.Show();
+                WpfTestFixture.Pump();
+
+                var achievementsPanel = FindChild<VirtualizingWrapPanel>(window);
+                Assert.NotNull(achievementsPanel);
+                Assert.Equal(VirtualizationMode.Standard, VirtualizingPanel.GetVirtualizationMode(achievementsPanel));
+
+                // ListBox.Plain's own Recycling request is untouched by this fix -- it is
+                // still declared on the ListBox that hosts the (separate) Statistics list,
+                // which is what VirtualizingStackPanel actually resolves for itself. Selecting
+                // the tab tears down the achievements content, so the only ListBox left in the
+                // tree afterwards is Statistics'.
+                var tabs = FindChild<TabControl>(window);
+                Assert.NotNull(tabs);
+                tabs.SelectedIndex = 1;
+                WpfTestFixture.Pump();
+                WpfTestFixture.Pump();
+
+                var statisticsList = FindChild<ListBox>(window);
+                Assert.NotNull(statisticsList);
+                Assert.Equal(VirtualizationMode.Recycling, VirtualizingPanel.GetVirtualizationMode(statisticsList));
+
+                window.Close();
+                WpfTestFixture.Pump();
+            });
+        }
+
+        [Fact]
+        public void PickerGameListPanelDeclaresStandardVirtualization()
+        {
+            this._Fixture.Invoke(() =>
+            {
+                FakeLibrary library = new();
+                library.Add(10, "Alpha");
+                Task<List<GameListEntry>> Loader(CancellationToken ct) =>
+                    Task.FromResult(new List<GameListEntry> { new(10, "normal") });
+                var vm = new GameLibraryViewModel(library, Loader);
+
+                var window = new SAM.Picker.MainWindow(vm)
+                {
+                    WindowStartupLocation = WindowStartupLocation.Manual,
+                    ShowInTaskbar = false,
+                    Left = -32000,
+                    Top = -32000,
+                };
+                window.Show();
+                WpfTestFixture.Pump();
+
+                var panel = FindChild<VirtualizingWrapPanel>(window);
+                Assert.NotNull(panel);
+                Assert.Equal(VirtualizationMode.Standard, VirtualizingPanel.GetVirtualizationMode(panel));
 
                 window.Close();
                 WpfTestFixture.Pump();

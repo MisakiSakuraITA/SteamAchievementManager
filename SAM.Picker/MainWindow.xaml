@@ -244,13 +244,18 @@
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                      ScrollViewer.VerticalScrollBarVisibility="Auto"
                      VirtualizingPanel.IsVirtualizing="True"
-                     VirtualizingPanel.VirtualizationMode="Standard"
                      KeyboardNavigation.DirectionalNavigation="Contained"
                      MouseDoubleClick="OnGameActivated"
                      KeyDown="OnGameListKeyDown">
                 <ListBox.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <controls:VirtualizingWrapPanel ItemWidth="248" ItemHeight="156" />
+                        <!-- VirtualizationMode is declared here, on the panel itself, rather
+                             than on the ListBox: this panel never recycles containers no
+                             matter what a shared list style asks for (see its own remarks),
+                             so stating the mode it actually honours here means no future list
+                             style can silently disagree with it. -->
+                        <controls:VirtualizingWrapPanel ItemWidth="248" ItemHeight="156"
+                                                         VirtualizingPanel.VirtualizationMode="Standard" />
                     </ItemsPanelTemplate>
                 </ListBox.ItemsPanel>
             </ListBox>

@@ -370,11 +370,17 @@
                              ItemsSource="{Binding Achievements}"
                              ItemTemplate="{StaticResource AchievementCardTemplate}"
                              ItemContainerStyle="{StaticResource ListBoxItem.Row}"
-                             ScrollViewer.CanContentScroll="True"
-                             VirtualizingPanel.VirtualizationMode="Standard">
+                             ScrollViewer.CanContentScroll="True">
                         <ListBox.ItemsPanel>
                             <ItemsPanelTemplate>
-                                <controls:VirtualizingWrapPanel ItemWidth="368" ItemHeight="106" />
+                                <!-- VirtualizationMode is declared here, on the panel itself,
+                                     rather than on the ListBox: ListBox.Plain asks for
+                                     Recycling, which is correct for the Statistics list below
+                                     (a plain VirtualizingStackPanel) but not honoured by this
+                                     panel (see its own remarks), so it is stated explicitly at
+                                     the point this panel is actually used. -->
+                                <controls:VirtualizingWrapPanel ItemWidth="368" ItemHeight="106"
+                                                                 VirtualizingPanel.VirtualizationMode="Standard" />
                             </ItemsPanelTemplate>
                         </ListBox.ItemsPanel>
                     </ListBox>

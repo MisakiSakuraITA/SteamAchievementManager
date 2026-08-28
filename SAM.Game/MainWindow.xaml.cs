@@ -67,7 +67,11 @@ namespace SAM.Game
             this.DataContext = this._Manager;
             this.Title = "Steam Achievement Manager | " + this._Manager.GameName;
 
-            this._CallbackTimer = new(DispatcherPriority.Background, this.Dispatcher)
+            // Background is outranked by input, so sustained scrolling of a large achievement
+            // list could starve the tick indefinitely -- and with it, the liveness check at
+            // the end of RunCallbacks that notices Steam has gone away. Input keeps the pump
+            // a peer of input processing instead of subordinate to it.
+            this._CallbackTimer = new(DispatcherPriority.Input, this.Dispatcher)
             {
                 Interval = _CallbackInterval,
             };

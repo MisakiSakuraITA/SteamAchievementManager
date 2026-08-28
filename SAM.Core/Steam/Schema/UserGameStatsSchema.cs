@@ -159,7 +159,11 @@ namespace SAM.Core.Steam.Schema
 
                     default:
                     {
-                        throw new InvalidOperationException("invalid stat type");
+                        // A type this build does not recognise -- a future Steam addition, or
+                        // an unusual schema -- must not take the rest of an otherwise valid
+                        // schema down with it. Skip the entry exactly like an explicitly
+                        // Invalid one rather than aborting the whole parse.
+                        break;
                     }
                 }
             }

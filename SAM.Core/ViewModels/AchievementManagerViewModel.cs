@@ -329,16 +329,35 @@ namespace SAM.Core.ViewModels
         /// value back from Steam. Separated from the load so a schema obtained any other way
         /// can drive the same screen.
         /// </summary>
+        /// <remarks>
+        /// Steam can redeliver <c>UserStatsReceived</c> on its own schedule, not only in
+        /// response to a request this view model made, so a reload can arrive while the user
+        /// still has edits pending. Rebuilding from scratch would otherwise discard them
+        /// without asking -- the pending state is captured by id before the rebuild and
+        /// reapplied to whichever new view models still exist afterwards.
+        /// </remarks>
         public void Load(UserGameStatsSchema schema)
         {
+            var pendingUnlocked = new Dictionary<string, bool>(StringComparer.Ordinal);
             foreach (var achievement in this._AllAchievements)
             {
+                if (achievement.IsModified == true)
+                {
+                    pendingUnlocked[achievement.Id] = achievement.IsUnlocked;
+                }
+
                 achievement.Changed -= this.OnAchievementChanged;
                 achievement.ProtectedChangeRejected -= this.OnProtectedChangeRejected;
             }
 
+            var pendingStatText = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var statistic in this._AllStatistics)
             {
+                if (statistic.IsModified == true)
+                {
+                    pendingStatText[statistic.Id] = statistic.ValueText;
+                }
+
                 statistic.Changed -= this.OnStatisticChanged;
             }
 
@@ -361,6 +380,14 @@ namespace SAM.Core.ViewModels
                 achievement.Changed += this.OnAchievementChanged;
                 achievement.ProtectedChangeRejected += this.OnProtectedChangeRejected;
                 this._AllAchievements.Add(achievement);
+
+                // TrySetUnlocked silently declines when the achievement is protected, exactly
+                // as it does for the bulk commands -- a reload must not force through an edit
+                // that would have been refused had the user made it just now.
+                if (pendingUnlocked.TryGetValue(achievement.Id, out var wantsUnlocked) == true)
+                {
+                    achievement.TrySetUnlocked(wantsUnlocked);
+                }
             }
 
             foreach (var definition in schema.Stats)
@@ -393,6 +420,11 @@ namespace SAM.Core.ViewModels
 
                 statistic.Changed += this.OnStatisticChanged;
                 this._AllStatistics.Add(statistic);
+
+                if (pendingStatText.TryGetValue(statistic.Id, out var wantsText) == true)
+                {
+                    statistic.ValueText = wantsText;
+                }
             }
 
             this.Statistics.ReplaceAll(this._AllStatistics);
