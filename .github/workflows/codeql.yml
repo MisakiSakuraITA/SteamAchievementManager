@@ -1,0 +1,46 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  schedule:
+    # Every Sunday at 00:00 UTC.
+    - cron: "0 0 * * 0"
+
+jobs:
+  analyze:
+    name: Analyze (C#)
+    runs-on: windows-latest
+    permissions:
+      security-events: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+
+      # A manual build, rather than the autobuild action: the solution only targets a
+      # net8.0-windows / x86 platform, which is more reliable to spell out explicitly than
+      # to leave to autobuild's own guesswork.
+      - name: Restore dependencies
+        run: dotnet restore SAM.sln
+
+      - name: Build
+        run: dotnet build SAM.sln --configuration Release --no-restore /p:Platform=x86
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:csharp"

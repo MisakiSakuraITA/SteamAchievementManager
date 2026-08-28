@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # NuGet dependencies for every project in the solution (SAM.API, SAM.Core, SAM.UI,
+  # SAM.Picker, SAM.Game, SAM.Tests all resolve from the repository root).
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "nuget"
+
+  # The actions referenced by the workflows in .github/workflows.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"

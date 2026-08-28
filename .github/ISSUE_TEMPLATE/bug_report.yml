@@ -1,0 +1,85 @@
+name: Bug Report
+description: Report something that isn't working as expected.
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Filling out the sections below as
+        completely as you can makes it much faster to reproduce and fix.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What went wrong?
+      placeholder: A clear, concise description of the bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: How can we see this happen ourselves?
+      placeholder: |
+        1. Launch SAM.Picker.exe
+        2. Select '...'
+        3. Click '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen instead?
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      placeholder: "Windows 11 23H2"
+    validations:
+      required: true
+
+  - type: input
+    id: dotnet-runtime
+    attributes:
+      label: .NET Runtime
+      description: The version reported by the .NET Desktop Runtime installer, or `dotnet --info`.
+      placeholder: ".NET Desktop Runtime 8.0.x (x86)"
+    validations:
+      required: true
+
+  - type: input
+    id: sam-version
+    attributes:
+      label: SAM Version
+      description: Shown in the title bar, or the version of the release you downloaded.
+      placeholder: "7.1.2"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Paste any relevant output, stack trace, or crash dialog text. This is rendered as a code block automatically, no backticks needed.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues and didn't find this already reported.
+          required: true
+        - label: Steam was running and logged in when this happened.
+          required: false
