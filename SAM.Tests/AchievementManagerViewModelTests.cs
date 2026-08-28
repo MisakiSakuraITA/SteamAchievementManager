@@ -263,6 +263,110 @@ namespace SAM.Tests
         }
 
         [Fact]
+        public void ReloadWithAnUnchangedIdReusesTheSameAchievementAndStatisticInstances()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            var schema = BuildSchema(steam);
+            manager.Load(schema);
+
+            var achievementBefore = manager.Achievements.First(a => a.Id == "ACH_A");
+            var statisticBefore = manager.Statistics[0];
+
+            manager.Load(schema);
+
+            var achievementAfter = manager.Achievements.First(a => a.Id == "ACH_A");
+            var statisticAfter = manager.Statistics[0];
+
+            // The actual point of M-05: a reload with nothing new updates the existing
+            // instances in place rather than replacing every one of them.
+            Assert.Same(achievementBefore, achievementAfter);
+            Assert.Same(statisticBefore, statisticAfter);
+        }
+
+        [Fact]
+        public void ReloadWithChangedDisplayTextUpdatesTheReusedInstanceInPlace()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            steam.SeedAchievement("ACH_A", false);
+            var original = new List<AchievementDefinition>
+            {
+                new() { Id = "ACH_A", Name = "Original Name", Description = "Original description", Permission = 0 },
+            };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(new UserGameStatsSchema(original, Enumerable.Empty<StatDefinition>()));
+
+            var before = manager.Achievements[0];
+            Assert.Equal("Original Name", before.Name);
+
+            // A redelivered schema can legitimately carry different display text -- a
+            // language change, say -- and a reused instance must not go on showing what it
+            // was first constructed with.
+            var retranslated = new List<AchievementDefinition>
+            {
+                new() { Id = "ACH_A", Name = "Translated Name", Description = "Translated description", Permission = 0 },
+            };
+            manager.Load(new UserGameStatsSchema(retranslated, Enumerable.Empty<StatDefinition>()));
+
+            var after = manager.Achievements[0];
+            Assert.Same(before, after);
+            Assert.Equal("Translated Name", after.Name);
+            Assert.Equal("Translated description", after.Description);
+        }
+
+        [Fact]
+        public void ReloadWithAnIdNoLongerInTheSchemaDropsThatAchievement()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(BuildSchema(steam));
+            Assert.Equal(3, manager.AchievementCount);
+
+            var fewer = new List<AchievementDefinition>
+            {
+                new() { Id = "ACH_A", Name = "Alpha", Description = "first", Permission = 0 },
+            };
+            manager.Load(new UserGameStatsSchema(fewer, Enumerable.Empty<StatDefinition>()));
+
+            Assert.Equal(1, manager.AchievementCount);
+            Assert.Equal("ACH_A", manager.Achievements[0].Id);
+        }
+
+        [Fact]
+        public void ModifiedCountCombinesAchievementAndStatisticEditsAndTracksEitherKindAlone()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(BuildSchema(steam));
+
+            Assert.Equal(0, manager.ModifiedCount);
+
+            // A statistic edit alone must move the combined count -- this is exactly the
+            // path that, before M-10, only ever raised ModifiedStatisticCount, leaving a
+            // chip bound to ModifiedCount alone stuck reporting pending achievements only.
+            manager.Statistics[0].ValueText = "55";
+            Assert.Equal(1, manager.ModifiedCount);
+
+            manager.Achievements.First(a => a.Id == "ACH_A").IsUnlocked = true;
+            Assert.Equal(2, manager.ModifiedCount);
+        }
+
+        [Fact]
+        public void StatisticEditAloneRaisesModifiedCountChanged()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(BuildSchema(steam));
+
+            var raised = new List<string>();
+            manager.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+            manager.Statistics[0].ValueText = "55";
+
+            Assert.Contains(nameof(AchievementManagerViewModel.ModifiedCount), raised);
+        }
+
+        [Fact]
         public void DisconnectGatesEveryCommandAndClearsBusyState()
         {
             FakeStats steam = new() { InstallPath = null };

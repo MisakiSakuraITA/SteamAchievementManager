@@ -43,6 +43,12 @@ namespace SAM.Core.Caching
     {
         private static readonly Task<byte[]> _NoData = Task.FromResult<byte[]>(null);
 
+        // How long a transient failure (a timeout, a dropped connection, a server error)
+        // blocks retries for the same identity. Long enough that a burst of requests during a
+        // network blip does not just re-fail immediately; short enough that the asset comes
+        // back on its own once the network does, with nobody having to restart the app.
+        private static readonly TimeSpan _TransientRetryDelay = TimeSpan.FromSeconds(30);
+
         private readonly DiskAssetCache _Disk;
         private readonly SemaphoreSlim _NetworkSlots;
         private readonly CancellationTokenSource _Shutdown;
@@ -50,6 +56,7 @@ namespace SAM.Core.Caching
         private readonly object _Lock;
         private readonly Dictionary<string, Task<byte[]>> _Pending;
         private readonly HashSet<string> _Unavailable;
+        private readonly Dictionary<string, DateTime> _TransientlyUnavailable;
 
         private bool _IsDisposed;
 
@@ -67,6 +74,7 @@ namespace SAM.Core.Caching
             this._Lock = new();
             this._Pending = new(StringComparer.Ordinal);
             this._Unavailable = new(StringComparer.Ordinal);
+            this._TransientlyUnavailable = new(StringComparer.Ordinal);
         }
 
         public bool IsDiskCacheEnabled => this._Disk.IsEnabled;
@@ -90,6 +98,17 @@ namespace SAM.Core.Caching
                 if (this._IsDisposed == true || this._Unavailable.Contains(identity) == true)
                 {
                     return _NoData;
+                }
+
+                // A transient block expires on its own once its retry delay has passed, so a
+                // network blip costs one wasted attempt rather than the rest of the session.
+                if (this._TransientlyUnavailable.TryGetValue(identity, out var retryAt) == true)
+                {
+                    if (DateTime.UtcNow < retryAt)
+                    {
+                        return _NoData;
+                    }
+                    this._TransientlyUnavailable.Remove(identity);
                 }
 
                 if (this._Pending.TryGetValue(identity, out var pending) == true)
@@ -156,11 +175,11 @@ namespace SAM.Core.Caching
                     return null;
                 }
 
-                byte[] downloaded;
+                HttpDownloader.DownloadResult result;
                 await this._NetworkSlots.WaitAsync(this._ShutdownToken).ConfigureAwait(false);
                 try
                 {
-                    downloaded = await HttpDownloader
+                    result = await HttpDownloader
                         .TryGetBytesAsync(uri, this._ShutdownToken)
                         .ConfigureAwait(false);
                 }
@@ -169,9 +188,19 @@ namespace SAM.Core.Caching
                     this._NetworkSlots.Release();
                 }
 
+                var downloaded = result.Data;
                 if (downloaded == null || downloaded.Length == 0)
                 {
-                    this.MarkUnavailable(identity);
+                    // A 404 will not stop being a 404; a timeout or a dropped connection might
+                    // not happen next time. Only the former is worth remembering indefinitely.
+                    if (result.IsTransientFailure == true)
+                    {
+                        this.MarkTransientlyUnavailable(identity);
+                    }
+                    else
+                    {
+                        this.MarkUnavailable(identity);
+                    }
                     return null;
                 }
 
@@ -200,6 +229,28 @@ namespace SAM.Core.Caching
             lock (this._Lock)
             {
                 this._Unavailable.Add(identity);
+            }
+        }
+
+        private void MarkTransientlyUnavailable(string identity)
+        {
+            lock (this._Lock)
+            {
+                this._TransientlyUnavailable[identity] = DateTime.UtcNow + _TransientRetryDelay;
+            }
+        }
+
+        /// <summary>
+        /// Clears every transient failure block immediately, rather than waiting for each to
+        /// expire on its own. Intended for an explicit, user-initiated refresh, where "try
+        /// again right now" is exactly what was asked for. Permanent failures are unaffected --
+        /// an asset that does not exist is not made to exist by asking again.
+        /// </summary>
+        public void ClearTransientFailures()
+        {
+            lock (this._Lock)
+            {
+                this._TransientlyUnavailable.Clear();
             }
         }
 

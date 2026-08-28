@@ -84,14 +84,17 @@ namespace SAM.Core.Net
         }
 
         /// <summary>
-        /// Downloads a resource, returning <see langword="null"/> for anything that is not a
-        /// usable payload: a non-success status, a timeout, a DNS or transport failure.
+        /// Downloads a resource. <see cref="DownloadResult.Data"/> is <see langword="null"/>
+        /// for anything that is not a usable payload, with
+        /// <see cref="DownloadResult.IsTransientFailure"/> saying whether the failure is worth
+        /// trying again later (a timeout, a DNS or transport failure, a server error) or is
+        /// as good as permanent (a 404: retrying will not make the resource exist).
         /// </summary>
-        public static async Task<byte[]> TryGetBytesAsync(Uri uri, CancellationToken cancellationToken)
+        public static async Task<DownloadResult> TryGetBytesAsync(Uri uri, CancellationToken cancellationToken)
         {
             if (uri == null)
             {
-                return null;
+                return DownloadResult.Permanent;
             }
 
             try
@@ -103,9 +106,16 @@ namespace SAM.Core.Net
                 {
                     if (response.IsSuccessStatusCode == false)
                     {
-                        return null;
+                        // A 404 means the resource does not exist; nothing about trying again
+                        // changes that. Anything else -- rate limiting, a server-side error --
+                        // is the server's problem this moment, not a verdict on the asset.
+                        return response.StatusCode == HttpStatusCode.NotFound
+                            ? DownloadResult.Permanent
+                            : DownloadResult.Transient;
                     }
-                    return await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+
+                    var data = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                    return new DownloadResult(data, isTransientFailure: false);
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested == true)
@@ -115,20 +125,36 @@ namespace SAM.Core.Net
             catch (OperationCanceledException)
             {
                 // HttpClient surfaces its own timeout as a cancellation.
-                return null;
+                return DownloadResult.Transient;
             }
             catch (HttpRequestException)
             {
-                return null;
+                return DownloadResult.Transient;
             }
             catch (IOException)
             {
-                return null;
+                return DownloadResult.Transient;
             }
             catch (ObjectDisposedException)
             {
-                // Shutdown raced with an in-flight request.
-                return null;
+                // Shutdown raced with an in-flight request -- not a real signal either way,
+                // but "transient" is the safe side to default to.
+                return DownloadResult.Transient;
+            }
+        }
+
+        public readonly struct DownloadResult
+        {
+            public static readonly DownloadResult Permanent = new(null, isTransientFailure: false);
+            public static readonly DownloadResult Transient = new(null, isTransientFailure: true);
+
+            public readonly byte[] Data;
+            public readonly bool IsTransientFailure;
+
+            public DownloadResult(byte[] data, bool isTransientFailure)
+            {
+                this.Data = data;
+                this.IsTransientFailure = isTransientFailure;
             }
         }
 

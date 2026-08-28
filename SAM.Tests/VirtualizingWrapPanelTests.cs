@@ -116,6 +116,63 @@ namespace SAM.Tests
         }
 
         [Fact]
+        public void RealizesOneRowOfOverscanAboveAndBelowTheVisibleViewportWhenScrolledToTheMiddle()
+        {
+            this._Fixture.Invoke(() =>
+            {
+                const double itemHeight = 156.0;
+                var (host, list, panel) = BuildList(5000);
+                var columns = Math.Max(1, (int)Math.Floor(panel.ViewportWidth / 248.0));
+
+                // Scrolled well past the top and well short of the end, so neither overscan
+                // row is clamped away by the edges of the list.
+                panel.SetVerticalOffset(20 * itemHeight);
+                WpfTestFixture.Pump();
+
+                var realizedRows = panel.Children
+                    .OfType<FrameworkElement>()
+                    .Select(e => e.DataContext)
+                    .OfType<GameViewModel>()
+                    .Select(g => (int)g.Id / columns)
+                    .ToList();
+                Assert.NotEmpty(realizedRows);
+
+                var visibleFirstRow = (int)Math.Floor(panel.VerticalOffset / itemHeight);
+                var visibleLastRow = (int)Math.Ceiling((panel.VerticalOffset + panel.ViewportHeight) / itemHeight) - 1;
+
+                Assert.Equal(visibleFirstRow - 1, realizedRows.Min());
+                Assert.Equal(visibleLastRow + 1, realizedRows.Max());
+
+                host.Close();
+                WpfTestFixture.Pump();
+            });
+        }
+
+        [Fact]
+        public void OverscanAboveTheViewportIsClampedAtTheTopOfTheList()
+        {
+            this._Fixture.Invoke(() =>
+            {
+                var (host, list, panel) = BuildList(5000);
+
+                panel.SetVerticalOffset(0);
+                WpfTestFixture.Pump();
+
+                var minRealizedIndex = panel.Children
+                    .OfType<FrameworkElement>()
+                    .Select(e => e.DataContext)
+                    .OfType<GameViewModel>()
+                    .Min(g => (int)g.Id);
+
+                // Nothing precedes row 0, so there is no row above it left to overscan into.
+                Assert.Equal(0, minRealizedIndex);
+
+                host.Close();
+                WpfTestFixture.Pump();
+            });
+        }
+
+        [Fact]
         public void ExtentCoversEveryRowForTheActualColumnCount()
         {
             this._Fixture.Invoke(() =>

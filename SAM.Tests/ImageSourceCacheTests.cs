@@ -1,5 +1,11 @@
+using System;
+using System.IO;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Media.Imaging;
+using SAM.Core.Caching;
 using SAM.UI.Imaging;
 using Xunit;
 
@@ -25,6 +31,15 @@ namespace SAM.Tests
             var bitmap = BitmapSource.Create(width, height, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null, pixels, stride);
             bitmap.Freeze();
             return bitmap;
+        }
+
+        private static byte[] EncodePng(BitmapSource bitmap)
+        {
+            PngBitmapEncoder encoder = new();
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using MemoryStream stream = new();
+            encoder.Save(stream);
+            return stream.ToArray();
         }
 
         [Fact]
@@ -118,6 +133,67 @@ namespace SAM.Tests
                 Assert.Equal(0, cache.Count);
                 Assert.Equal(0, cache.SizeInBytes);
             });
+        }
+
+        [Fact]
+        public void StoreReturnsTheAlreadyCachedInstanceWhenTwoDecodesRaceForTheSameIdentity()
+        {
+            this._Fixture.Invoke(() =>
+            {
+                using ImageSourceCache cache = new("t-race", 1, 1_000_000);
+                var first = MakeBitmap(64, 64);
+                var second = MakeBitmap(64, 64); // a distinct instance, same identity as `first`
+
+                var firstResult = (System.Windows.Media.ImageSource)_StoreMethod.Invoke(cache, new object[] { "id", first });
+                var secondResult = (System.Windows.Media.ImageSource)_StoreMethod.Invoke(cache, new object[] { "id", second });
+
+                // Both callers must end up sharing the winner's instance -- the first one
+                // stored -- rather than the second race silently overwriting it, or handing
+                // its own caller back an uncounted copy.
+                Assert.Same(first, firstResult);
+                Assert.Same(first, secondResult);
+                Assert.Equal(1, cache.Count);
+            });
+        }
+
+        [Fact]
+        public async Task GetAsyncDecodesFromDiskOffTheUiThreadAndReturnsAFrozenImage()
+        {
+            var category = "t-diskhit-" + Guid.NewGuid().ToString("N");
+            try
+            {
+                const string identity = "some-icon";
+                var key = CacheKey.FromIdentity(identity);
+
+                BitmapSource seed = null;
+                this._Fixture.Invoke(() => seed = MakeBitmap(48, 48));
+                var encoded = EncodePng(seed);
+
+                DiskAssetCache disk = new(category);
+                Assert.True(await disk.WriteAsync(key, encoded, CancellationToken.None));
+
+                // Run entirely off the UI thread with no captured SynchronizationContext, so
+                // this only passes if decoding and Freeze() genuinely do not need a
+                // dispatcher to complete -- a disk hit never touches the network either way,
+                // so this exercises exactly the decode path LoadAsync now runs with
+                // ConfigureAwait(false).
+                var resolved = await Task.Run(async () =>
+                {
+                    using ImageSourceCache cache = new(category, 1, 1_000_000);
+                    return await cache.GetAsync(identity, null, 0);
+                });
+
+                Assert.NotNull(resolved);
+                Assert.True(((Freezable)resolved).IsFrozen);
+            }
+            finally
+            {
+                var path = CacheLocation.GetCategoryPath(category);
+                if (path != null && Directory.Exists(path))
+                {
+                    try { Directory.Delete(path, true); } catch { }
+                }
+            }
         }
     }
 }

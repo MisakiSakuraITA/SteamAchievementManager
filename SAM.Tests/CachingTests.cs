@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using SAM.Core.Caching;
@@ -118,6 +120,143 @@ namespace SAM.Tests
             if (path != null && Directory.Exists(path))
             {
                 try { Directory.Delete(path, true); } catch { }
+            }
+        }
+    }
+
+    public class AssetCacheTests : IDisposable
+    {
+        private readonly string _Category = "selftest-assetcache-" + Guid.NewGuid().ToString("N");
+
+        private static readonly MethodInfo _MarkTransientlyUnavailable = typeof(AssetCache)
+            .GetMethod("MarkTransientlyUnavailable", BindingFlags.NonPublic | BindingFlags.Instance);
+
+        private static readonly FieldInfo _TransientlyUnavailableField = typeof(AssetCache)
+            .GetField("_TransientlyUnavailable", BindingFlags.NonPublic | BindingFlags.Instance);
+
+        private static readonly FieldInfo _UnavailableField = typeof(AssetCache)
+            .GetField("_Unavailable", BindingFlags.NonPublic | BindingFlags.Instance);
+
+        [Fact]
+        public async Task ATransientFailureBlocksImmediatelyThenExpiresOnceItsRetryTimeHasPassed()
+        {
+            AssetCache cache = new(this._Category, 1);
+            try
+            {
+                _MarkTransientlyUnavailable.Invoke(cache, new object[] { "id" });
+                var blocks = (Dictionary<string, DateTime>)_TransientlyUnavailableField.GetValue(cache);
+                Assert.True(blocks.ContainsKey("id"));
+
+                // Blocked immediately: a fresh transient block must stop GetAsync before it
+                // ever reaches LoadAsync, which -- given uri == null here -- would otherwise
+                // mark the identity permanently unavailable instead and mask what this is
+                // actually testing.
+                Assert.Null(await cache.GetAsync("id", null));
+                Assert.True(blocks.ContainsKey("id"));
+
+                // Force the retry time into the past rather than waiting out the real delay.
+                blocks["id"] = DateTime.UtcNow - TimeSpan.FromSeconds(1);
+
+                // Expired now: GetAsync must actually try again rather than trusting the
+                // stale block, which this observes by the lazy expiry clearing the entry.
+                await cache.GetAsync("id", null);
+                Assert.False(blocks.ContainsKey("id"));
+            }
+            finally
+            {
+                cache.Dispose();
+            }
+        }
+
+        [Fact]
+        public void ClearTransientFailuresRemovesEveryBlockImmediately()
+        {
+            AssetCache cache = new(this._Category, 1);
+            try
+            {
+                _MarkTransientlyUnavailable.Invoke(cache, new object[] { "a" });
+                _MarkTransientlyUnavailable.Invoke(cache, new object[] { "b" });
+
+                var blocks = (Dictionary<string, DateTime>)_TransientlyUnavailableField.GetValue(cache);
+                Assert.Equal(2, blocks.Count);
+
+                cache.ClearTransientFailures();
+
+                Assert.Empty(blocks);
+            }
+            finally
+            {
+                cache.Dispose();
+            }
+        }
+
+        [Fact]
+        public async Task ClearTransientFailuresDoesNotResurrectAPermanentFailure()
+        {
+            AssetCache cache = new(this._Category, 1);
+            try
+            {
+                // uri == null drives straight to a permanent mark, matching a 404: retrying
+                // is not expected to help.
+                Assert.Null(await cache.GetAsync("gone-for-good", null));
+
+                cache.ClearTransientFailures();
+
+                var permanent = (HashSet<string>)_UnavailableField.GetValue(cache);
+                Assert.Contains("gone-for-good", permanent);
+            }
+            finally
+            {
+                cache.Dispose();
+            }
+        }
+
+        public void Dispose()
+        {
+            var path = CacheLocation.GetCategoryPath(this._Category);
+            if (path != null && Directory.Exists(path))
+            {
+                try { Directory.Delete(path, true); } catch { }
+            }
+        }
+    }
+
+    public class CacheLocationWritabilityTests
+    {
+        private static readonly MethodInfo _IsWritable = typeof(CacheLocation)
+            .GetMethod("IsWritable", BindingFlags.NonPublic | BindingFlags.Static);
+
+        [Fact]
+        public void IsWritableReturnsTrueForAGenuinelyWritableDirectory()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "SAM.Tests-writable-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+            try
+            {
+                Assert.True((bool)_IsWritable.Invoke(null, new object[] { directory }));
+            }
+            finally
+            {
+                try { Directory.Delete(directory, true); } catch { }
+            }
+        }
+
+        [Fact]
+        public void IsWritableReturnsFalseWithoutThrowingWhenTheProbeCannotBeCreated()
+        {
+            // Directory.CreateDirectory/Directory.Exists would both say a path like this
+            // resolves fine, which is exactly the shape of a locked-down folder this guards
+            // against -- a plain file standing in for "directory" reproduces the same shape
+            // portably (writing a probe file inside it fails) without needing real ACLs.
+            var file = Path.Combine(Path.GetTempPath(), "SAM.Tests-notadir-" + Guid.NewGuid().ToString("N"));
+            File.WriteAllText(file, "x");
+            try
+            {
+                Assert.False((bool)_IsWritable.Invoke(null, new object[] { file }));
+            }
+            finally
+            {
+                try { File.Delete(file); } catch { }
             }
         }
     }

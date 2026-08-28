@@ -37,8 +37,8 @@ namespace SAM.Core.ViewModels
 
         private readonly uint _AppId;
         private readonly SynchronizationContext _Context;
-        private readonly string _IconNormal;
-        private readonly string _IconLocked;
+        private string _IconNormal;
+        private string _IconLocked;
 
         private bool _IsAchieved;
         private bool _IsUnlocked;
@@ -54,18 +54,7 @@ namespace SAM.Core.ViewModels
             this._AppId = appId;
             this._Context = SynchronizationContext.Current;
             this.Id = definition.Id;
-            this.Description = definition.Description ?? "";
-            this.IsHidden = definition.IsHidden;
-            this.Permission = definition.Permission;
-
-            // A name beginning with '#' is an unlocalised token, not something to show.
-            this.Name = string.IsNullOrEmpty(definition.Name) == true ||
-                        definition.Name.StartsWith("#", StringComparison.InvariantCulture) == true
-                ? definition.Id
-                : definition.Name;
-
-            this._IconNormal = string.IsNullOrEmpty(definition.IconNormal) == true ? null : definition.IconNormal;
-            this._IconLocked = string.IsNullOrEmpty(definition.IconLocked) == true ? this._IconNormal : definition.IconLocked;
+            this.ApplyDefinition(definition);
 
             this._IsAchieved = isAchieved;
             this._IsUnlocked = isAchieved;
@@ -74,13 +63,13 @@ namespace SAM.Core.ViewModels
 
         public string Id { get; }
 
-        public string Name { get; }
+        public string Name { get; private set; }
 
-        public string Description { get; }
+        public string Description { get; private set; }
 
-        public bool IsHidden { get; }
+        public bool IsHidden { get; private set; }
 
-        public int Permission { get; }
+        public int Permission { get; private set; }
 
         /// <summary>
         /// Steam marks some achievements as owner-only. They are shown, but refuse to change.
@@ -196,6 +185,74 @@ namespace SAM.Core.ViewModels
             this.IsAchieved = this._IsUnlocked;
             this.UnlockTime = unlockTime;
             this.Raise(nameof(this.IsModified), nameof(this.IconIdentity), nameof(this.IconUri));
+        }
+
+        /// <summary>
+        /// Refreshes this instance from a freshly read definition and value, so it can be
+        /// reused across a reload instead of a new instance being constructed for the same
+        /// achievement id.
+        /// </summary>
+        /// <remarks>
+        /// Definition-derived display fields always move to the fresh values -- a redelivered
+        /// schema can legitimately carry different text (a language change) or a different
+        /// permission, and a reused instance must not go on showing what it was first
+        /// constructed with. The pending choice is handled differently: an edit still pending
+        /// is left untouched unless the achievement has become protected since it was staged,
+        /// in which case it is dropped, exactly as attempting that same edit fresh right now
+        /// would be refused by <see cref="TrySetUnlocked"/>. An achievement with nothing
+        /// pending simply moves to mirror the fresh value, exactly as a newly constructed
+        /// instance would have started out.
+        /// </remarks>
+        internal void RefreshStoredState(AchievementDefinition definition, bool isAchieved, DateTime? unlockTime)
+        {
+            if (definition == null)
+            {
+                throw new ArgumentNullException(nameof(definition));
+            }
+
+            var hadPendingEdit = this.IsModified;
+
+            this.ApplyDefinition(definition);
+            this.IsAchieved = isAchieved;
+            this.UnlockTime = unlockTime;
+
+            if (hadPendingEdit == false || this.IsProtected == true)
+            {
+                this._IsUnlocked = isAchieved;
+            }
+
+            this.Raise(
+                nameof(this.Name),
+                nameof(this.Description),
+                nameof(this.IsHidden),
+                nameof(this.Permission),
+                nameof(this.IsProtected),
+                nameof(this.IsUnlocked),
+                nameof(this.IsModified),
+                nameof(this.IconIdentity),
+                nameof(this.IconUri));
+        }
+
+        /// <summary>
+        /// Sets the fields derived from the schema definition. Shared by the constructor and by
+        /// a reload's in-place refresh of a reused instance, so a redelivered schema with
+        /// different display text, a different permission, or different icon names is not left
+        /// stale on an instance that was reused rather than reconstructed.
+        /// </summary>
+        private void ApplyDefinition(AchievementDefinition definition)
+        {
+            this.Description = definition.Description ?? "";
+            this.IsHidden = definition.IsHidden;
+            this.Permission = definition.Permission;
+
+            // A name beginning with '#' is an unlocalised token, not something to show.
+            this.Name = string.IsNullOrEmpty(definition.Name) == true ||
+                        definition.Name.StartsWith("#", StringComparison.InvariantCulture) == true
+                ? definition.Id
+                : definition.Name;
+
+            this._IconNormal = string.IsNullOrEmpty(definition.IconNormal) == true ? null : definition.IconNormal;
+            this._IconLocked = string.IsNullOrEmpty(definition.IconLocked) == true ? this._IconNormal : definition.IconLocked;
         }
 
         /// <summary>Discards the pending state, e.g. after a failed store.</summary>

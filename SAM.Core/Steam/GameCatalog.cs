@@ -72,7 +72,8 @@ namespace SAM.Core.Steam
                 }
             }
 
-            var downloaded = await HttpDownloader.TryGetBytesAsync(_ListUri, cancellationToken).ConfigureAwait(false);
+            var downloadResult = await HttpDownloader.TryGetBytesAsync(_ListUri, cancellationToken).ConfigureAwait(false);
+            var downloaded = downloadResult.Data;
             var parsed = TryParse(downloaded);
             if (parsed != null)
             {

@@ -338,33 +338,28 @@ namespace SAM.Core.ViewModels
         /// <remarks>
         /// Steam can redeliver <c>UserStatsReceived</c> on its own schedule, not only in
         /// response to a request this view model made, so a reload can arrive while the user
-        /// still has edits pending. Rebuilding from scratch would otherwise discard them
-        /// without asking -- the pending state is captured by id before the rebuild and
-        /// reapplied to whichever new view models still exist afterwards.
+        /// still has edits pending. Rather than rebuilding every view model from scratch and
+        /// restoring pending state onto the replacements, an existing instance is looked up by
+        /// id and refreshed in place when the schema still has a matching entry -- its pending
+        /// edit, never having been touched, survives on its own. Only an id that is new this
+        /// schema gets a freshly constructed view model; one that dropped out of the schema is
+        /// simply left behind, already unsubscribed below, for the garbage collector.
         /// </remarks>
         public void Load(UserGameStatsSchema schema)
         {
-            var pendingUnlocked = new Dictionary<string, bool>(StringComparer.Ordinal);
+            var previousAchievements = new Dictionary<string, AchievementViewModel>(StringComparer.Ordinal);
             foreach (var achievement in this._AllAchievements)
             {
-                if (achievement.IsModified == true)
-                {
-                    pendingUnlocked[achievement.Id] = achievement.IsUnlocked;
-                }
-
                 achievement.Changed -= this.OnAchievementChanged;
                 achievement.ProtectedChangeRejected -= this.OnProtectedChangeRejected;
+                previousAchievements[achievement.Id] = achievement;
             }
 
-            var pendingStatText = new Dictionary<string, string>(StringComparer.Ordinal);
+            var previousStatistics = new Dictionary<string, StatViewModel>(StringComparer.Ordinal);
             foreach (var statistic in this._AllStatistics)
             {
-                if (statistic.IsModified == true)
-                {
-                    pendingStatText[statistic.Id] = statistic.ValueText;
-                }
-
                 statistic.Changed -= this.OnStatisticChanged;
+                previousStatistics[statistic.Id] = statistic;
             }
 
             this._AllAchievements.Clear();
@@ -382,18 +377,20 @@ namespace SAM.Core.ViewModels
                     continue;
                 }
 
-                AchievementViewModel achievement = new(this._Steam.AppId, definition, isAchieved, unlockTime);
+                AchievementViewModel achievement;
+                if (previousAchievements.Remove(definition.Id, out var existing) == true)
+                {
+                    existing.RefreshStoredState(definition, isAchieved, unlockTime);
+                    achievement = existing;
+                }
+                else
+                {
+                    achievement = new(this._Steam.AppId, definition, isAchieved, unlockTime);
+                }
+
                 achievement.Changed += this.OnAchievementChanged;
                 achievement.ProtectedChangeRejected += this.OnProtectedChangeRejected;
                 this._AllAchievements.Add(achievement);
-
-                // TrySetUnlocked silently declines when the achievement is protected, exactly
-                // as it does for the bulk commands -- a reload must not force through an edit
-                // that would have been refused had the user made it just now.
-                if (pendingUnlocked.TryGetValue(achievement.Id, out var wantsUnlocked) == true)
-                {
-                    achievement.TrySetUnlocked(wantsUnlocked);
-                }
             }
 
             foreach (var definition in schema.Stats)
@@ -408,14 +405,32 @@ namespace SAM.Core.ViewModels
                 {
                     if (this._Steam.TryGetIntegerStat(integerDefinition.Id, out var value) == true)
                     {
-                        statistic = new IntegerStatViewModel(integerDefinition, value);
+                        if (previousStatistics.Remove(integerDefinition.Id, out var existing) == true &&
+                            existing is IntegerStatViewModel existingInteger)
+                        {
+                            existingInteger.RefreshOriginalValue(integerDefinition, value);
+                            statistic = existingInteger;
+                        }
+                        else
+                        {
+                            statistic = new IntegerStatViewModel(integerDefinition, value);
+                        }
                     }
                 }
                 else if (definition is FloatStatDefinition floatDefinition)
                 {
                     if (this._Steam.TryGetFloatStat(floatDefinition.Id, out var value) == true)
                     {
-                        statistic = new FloatStatViewModel(floatDefinition, value);
+                        if (previousStatistics.Remove(floatDefinition.Id, out var existing) == true &&
+                            existing is FloatStatViewModel existingFloat)
+                        {
+                            existingFloat.RefreshOriginalValue(floatDefinition, value);
+                            statistic = existingFloat;
+                        }
+                        else
+                        {
+                            statistic = new FloatStatViewModel(floatDefinition, value);
+                        }
                     }
                 }
 
@@ -426,11 +441,6 @@ namespace SAM.Core.ViewModels
 
                 statistic.Changed += this.OnStatisticChanged;
                 this._AllStatistics.Add(statistic);
-
-                if (pendingStatText.TryGetValue(statistic.Id, out var wantsText) == true)
-                {
-                    statistic.ValueText = wantsText;
-                }
             }
 
             this.Statistics.ReplaceAll(this._AllStatistics);
@@ -624,6 +634,7 @@ namespace SAM.Core.ViewModels
         {
             this.Raise(
                 nameof(this.ModifiedStatisticCount),
+                nameof(this.ModifiedCount),
                 nameof(this.IsModified),
                 nameof(this.HasValidationErrors));
             this.StoreCommand.RaiseCanExecuteChanged();
@@ -656,6 +667,7 @@ namespace SAM.Core.ViewModels
                 nameof(this.CompletionText),
                 nameof(this.ModifiedAchievementCount),
                 nameof(this.ModifiedStatisticCount),
+                nameof(this.ModifiedCount),
                 nameof(this.IsModified),
                 nameof(this.HasValidationErrors));
             this.StoreCommand.RaiseCanExecuteChanged();

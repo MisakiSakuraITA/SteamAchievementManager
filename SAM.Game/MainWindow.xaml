@@ -469,7 +469,7 @@
                     <TextBlock Style="{StaticResource Text.Caption}"
                                Margin="7,0,0,0"
                                Foreground="{StaticResource Brush.Warning}"
-                               Text="{Binding ModifiedAchievementCount, StringFormat={}{0} pending}" />
+                               Text="{Binding ModifiedCount, StringFormat={}{0} pending}" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="3" Orientation="Horizontal">

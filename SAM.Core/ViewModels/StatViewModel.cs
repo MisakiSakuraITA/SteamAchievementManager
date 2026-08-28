@@ -44,17 +44,14 @@ namespace SAM.Core.ViewModels
             }
 
             this.Id = definition.Id;
-            this.DisplayName = string.IsNullOrEmpty(definition.DisplayName) == true
-                ? definition.Id
-                : definition.DisplayName;
-            this.Permission = definition.Permission;
+            this.ApplyDefinition(definition);
         }
 
         public string Id { get; }
 
-        public string DisplayName { get; }
+        public string DisplayName { get; private set; }
 
-        public int Permission { get; }
+        public int Permission { get; private set; }
 
         /// <summary>Steam refuses writes to these; the editor shows them read-only.</summary>
         /// <remarks>
@@ -144,6 +141,20 @@ namespace SAM.Core.ViewModels
             this.Raise(nameof(this.ValueText), nameof(this.ValidationError), nameof(this.HasError), nameof(this.IsModified));
         }
 
+        /// <summary>
+        /// Sets the fields derived from the schema definition. Shared by the constructor and by
+        /// a reload's in-place refresh of a reused instance, so a redelivered schema with
+        /// different display text or a different permission is not left stale on an instance
+        /// that was reused rather than reconstructed.
+        /// </summary>
+        protected void ApplyDefinition(StatDefinition definition)
+        {
+            this.DisplayName = string.IsNullOrEmpty(definition.DisplayName) == true
+                ? definition.Id
+                : definition.DisplayName;
+            this.Permission = definition.Permission;
+        }
+
         protected abstract void Validate();
 
         protected void ReportValidation(string error, bool isModified)
@@ -158,7 +169,7 @@ namespace SAM.Core.ViewModels
 
     public sealed class IntegerStatViewModel : StatViewModel
     {
-        private readonly IntegerStatDefinition _Definition;
+        private IntegerStatDefinition _Definition;
 
         private int _OriginalValue;
         private int _PendingValue;
@@ -220,11 +231,52 @@ namespace SAM.Core.ViewModels
             this._OriginalValue = this._PendingValue;
             this.IsModified = false;
         }
+
+        /// <summary>
+        /// Refreshes this instance from a freshly read definition and value, so it can be
+        /// reused across a reload instead of a new instance being constructed for the same
+        /// statistic id.
+        /// </summary>
+        /// <remarks>
+        /// Definition-derived fields (display name, permission, range, increment-only) always
+        /// move to the fresh definition -- a redelivered schema can legitimately carry a
+        /// different one, and a reused instance must not go on validating against what it was
+        /// first constructed with. A pending edit is left exactly as typed; re-validating
+        /// recomputes <see cref="StatViewModel.IsModified"/> and any range or increment-only
+        /// error against the fresh definition and original rather than the ones it was last
+        /// checked against. With nothing pending, the displayed text moves to mirror the fresh
+        /// value, exactly as a newly constructed instance would have started out.
+        /// </remarks>
+        internal void RefreshOriginalValue(IntegerStatDefinition definition, int value)
+        {
+            if (definition == null)
+            {
+                throw new ArgumentNullException(nameof(definition));
+            }
+
+            var hadPendingEdit = this.IsModified;
+
+            this._Definition = definition;
+            this.ApplyDefinition(definition);
+            this._OriginalValue = value;
+
+            if (hadPendingEdit == false)
+            {
+                this._PendingValue = value;
+                this.SetInitialText(value.ToString(CultureInfo.CurrentCulture));
+            }
+            else
+            {
+                this.Validate();
+            }
+
+            this.Raise(nameof(this.DisplayName), nameof(this.Permission), nameof(this.IsProtected), nameof(this.Extra));
+        }
     }
 
     public sealed class FloatStatViewModel : StatViewModel
     {
-        private readonly FloatStatDefinition _Definition;
+        private FloatStatDefinition _Definition;
 
         private float _OriginalValue;
         private float _PendingValue;
@@ -288,6 +340,47 @@ namespace SAM.Core.ViewModels
         {
             this._OriginalValue = this._PendingValue;
             this.IsModified = false;
+        }
+
+        /// <summary>
+        /// Refreshes this instance from a freshly read definition and value, so it can be
+        /// reused across a reload instead of a new instance being constructed for the same
+        /// statistic id.
+        /// </summary>
+        /// <remarks>
+        /// Definition-derived fields (display name, permission, range, increment-only) always
+        /// move to the fresh definition -- a redelivered schema can legitimately carry a
+        /// different one, and a reused instance must not go on validating against what it was
+        /// first constructed with. A pending edit is left exactly as typed; re-validating
+        /// recomputes <see cref="StatViewModel.IsModified"/> and any range or increment-only
+        /// error against the fresh definition and original rather than the ones it was last
+        /// checked against. With nothing pending, the displayed text moves to mirror the fresh
+        /// value, exactly as a newly constructed instance would have started out.
+        /// </remarks>
+        internal void RefreshOriginalValue(FloatStatDefinition definition, float value)
+        {
+            if (definition == null)
+            {
+                throw new ArgumentNullException(nameof(definition));
+            }
+
+            var hadPendingEdit = this.IsModified;
+
+            this._Definition = definition;
+            this.ApplyDefinition(definition);
+            this._OriginalValue = value;
+
+            if (hadPendingEdit == false)
+            {
+                this._PendingValue = value;
+                this.SetInitialText(value.ToString(CultureInfo.CurrentCulture));
+            }
+            else
+            {
+                this.Validate();
+            }
+
+            this.Raise(nameof(this.DisplayName), nameof(this.Permission), nameof(this.IsProtected), nameof(this.Extra));
         }
     }
 }
