@@ -32,7 +32,6 @@ namespace SAM.Game
 {
     public partial class MainWindow : ThemedWindow
     {
-        private const int _IconDecodeWidth = 56;
         private const long _IconCacheBudgetBytes = 80L * 1024 * 1024;
         private const int _MaximumConcurrentIconLoads = 6;
 

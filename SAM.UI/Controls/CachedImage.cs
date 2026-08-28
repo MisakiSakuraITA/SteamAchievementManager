@@ -66,12 +66,6 @@ namespace SAM.UI.Controls
             typeof(CachedImage),
             new PropertyMetadata(0, OnSourceInputChanged));
 
-        public static readonly DependencyProperty PlaceholderProperty = DependencyProperty.Register(
-            nameof(Placeholder),
-            typeof(ImageSource),
-            typeof(CachedImage),
-            new PropertyMetadata(null, OnSourceInputChanged));
-
         private static readonly DependencyPropertyKey _IsLoadedFromCachePropertyKey =
             DependencyProperty.RegisterReadOnly(
                 nameof(IsResolved),
@@ -110,14 +104,7 @@ namespace SAM.UI.Controls
             set => this.SetValue(DecodeWidthProperty, value);
         }
 
-        /// <summary>Shown while the asset is resolving, or when it cannot be resolved.</summary>
-        public ImageSource Placeholder
-        {
-            get => (ImageSource)this.GetValue(PlaceholderProperty);
-            set => this.SetValue(PlaceholderProperty, value);
-        }
-
-        /// <summary>Whether real artwork is currently shown rather than the placeholder.</summary>
+        /// <summary>Whether the source is currently real, resolved artwork.</summary>
         public bool IsResolved
         {
             get => (bool)this.GetValue(IsResolvedProperty);
@@ -179,8 +166,8 @@ namespace SAM.UI.Controls
             // whatever thread happens to be finishing the earlier one -- a thread-pool thread,
             // not this element's dispatcher thread. Touching a DependencyProperty from there
             // throws, and since this method is fire-and-forgotten, that throw would otherwise
-            // vanish silently, permanently stuck on the placeholder. Route explicitly instead
-            // of trusting the capture held.
+            // vanish silently, leaving the resolved artwork stuck one step short of ever being
+            // applied. Route explicitly instead of trusting the capture held.
             if (this.CheckAccess() == false)
             {
                 // Deliberately not awaited: the marshalled continuation completes on its own,
@@ -207,7 +194,7 @@ namespace SAM.UI.Controls
         private void Apply(ImageSource image)
         {
             this.IsResolved = image != null;
-            this.Source = image ?? this.Placeholder;
+            this.Source = image;
         }
     }
 }

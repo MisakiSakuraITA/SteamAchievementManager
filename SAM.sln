@@ -13,6 +13,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SAM.Core", "SAM.Core\SAM.Co
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SAM.UI", "SAM.UI\SAM.UI.csproj", "{7B1E4C6A-2F53-4D18-9E0B-51A4E7C29D31}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SAM.Tests", "SAM.Tests\SAM.Tests.csproj", "{78F20ADB-4D1C-4934-BB25-99D9E6B797E5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
@@ -39,6 +41,10 @@ Global
 		{7B1E4C6A-2F53-4D18-9E0B-51A4E7C29D31}.Debug|x86.Build.0 = Debug|x86
 		{7B1E4C6A-2F53-4D18-9E0B-51A4E7C29D31}.Release|x86.ActiveCfg = Release|x86
 		{7B1E4C6A-2F53-4D18-9E0B-51A4E7C29D31}.Release|x86.Build.0 = Release|x86
+		{78F20ADB-4D1C-4934-BB25-99D9E6B797E5}.Debug|x86.ActiveCfg = Debug|x86
+		{78F20ADB-4D1C-4934-BB25-99D9E6B797E5}.Debug|x86.Build.0 = Debug|x86
+		{78F20ADB-4D1C-4934-BB25-99D9E6B797E5}.Release|x86.ActiveCfg = Release|x86
+		{78F20ADB-4D1C-4934-BB25-99D9E6B797E5}.Release|x86.Build.0 = Release|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

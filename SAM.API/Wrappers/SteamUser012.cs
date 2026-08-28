@@ -35,7 +35,8 @@ namespace SAM.API.Wrappers
 
         public bool IsLoggedIn()
         {
-            return this.Call<bool, NativeLoggedOn>(this.Functions.LoggedOn, this.ObjectAddress);
+            var call = this.GetFunction<NativeLoggedOn>(this.Functions.LoggedOn);
+            return call(this.ObjectAddress);
         }
         #endregion
 

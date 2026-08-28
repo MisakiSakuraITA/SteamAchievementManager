@@ -85,6 +85,14 @@ namespace SAM.Core.ViewModels
         /// <summary>
         /// Steam marks some achievements as owner-only. They are shown, but refuse to change.
         /// </summary>
+        /// <remarks>
+        /// An achievement's Permission packs two separate restriction flags into its low bits,
+        /// and either one is Steam's way of saying this is not for a third-party tool to edit,
+        /// so the mask is 3 (0b11) to catch both. Compare
+        /// <see cref="StatViewModel.IsProtected"/>, which masks a stat's Permission with only
+        /// bit 1: a stat's bit 0 is unrelated schema bookkeeping, not a protection flag, and
+        /// folding it into the same mask there would lock stats Steam never actually restricts.
+        /// </remarks>
         public bool IsProtected => (this.Permission & 3) != 0;
 
         /// <summary>Raised when a change to a protected achievement was refused.</summary>

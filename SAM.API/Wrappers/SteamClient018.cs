@@ -34,7 +34,8 @@ namespace SAM.API.Wrappers
 
         public int CreateSteamPipe()
         {
-            return this.Call<int, NativeCreateSteamPipe>(this.Functions.CreateSteamPipe, this.ObjectAddress);
+            var call = this.GetFunction<NativeCreateSteamPipe>(this.Functions.CreateSteamPipe);
+            return call(this.ObjectAddress);
         }
         #endregion
 
@@ -45,7 +46,8 @@ namespace SAM.API.Wrappers
 
         public bool ReleaseSteamPipe(int pipe)
         {
-            return this.Call<bool, NativeReleaseSteamPipe>(this.Functions.ReleaseSteamPipe, this.ObjectAddress, pipe);
+            var call = this.GetFunction<NativeReleaseSteamPipe>(this.Functions.ReleaseSteamPipe);
+            return call(this.ObjectAddress, pipe);
         }
         #endregion
 
@@ -66,10 +68,8 @@ namespace SAM.API.Wrappers
 
         public int ConnectToGlobalUser(int pipe)
         {
-            return this.Call<int, NativeConnectToGlobalUser>(
-                this.Functions.ConnectToGlobalUser,
-                this.ObjectAddress,
-                pipe);
+            var call = this.GetFunction<NativeConnectToGlobalUser>(this.Functions.ConnectToGlobalUser);
+            return call(this.ObjectAddress, pipe);
         }
         #endregion
 
@@ -79,7 +79,8 @@ namespace SAM.API.Wrappers
 
         public void ReleaseUser(int pipe, int user)
         {
-            this.Call<NativeReleaseUser>(this.Functions.ReleaseUser, this.ObjectAddress, pipe, user);
+            var call = this.GetFunction<NativeReleaseUser>(this.Functions.ReleaseUser);
+            call(this.ObjectAddress, pipe, user);
         }
         #endregion
 
@@ -89,7 +90,8 @@ namespace SAM.API.Wrappers
 
         public void SetLocalIPBinding(uint host, ushort port)
         {
-            this.Call<NativeSetLocalIPBinding>(this.Functions.SetLocalIPBinding, this.ObjectAddress, host, port);
+            var call = this.GetFunction<NativeSetLocalIPBinding>(this.Functions.SetLocalIPBinding);
+            call(this.ObjectAddress, host, port);
         }
         #endregion
 
@@ -102,12 +104,8 @@ namespace SAM.API.Wrappers
         {
             using (var nativeVersion = NativeStrings.StringToStringHandle(version))
             {
-                IntPtr address = this.Call<IntPtr, NativeGetISteamUser>(
-                    this.Functions.GetISteamUser,
-                    this.ObjectAddress,
-                    user,
-                    pipe,
-                    nativeVersion.Handle);
+                var call = this.GetFunction<NativeGetISteamUser>(this.Functions.GetISteamUser);
+                IntPtr address = call(this.ObjectAddress, user, pipe, nativeVersion.Handle);
                 TClass result = new();
                 result.SetupFunctions(address);
                 return result;
@@ -131,12 +129,8 @@ namespace SAM.API.Wrappers
         {
             using (var nativeVersion = NativeStrings.StringToStringHandle(version))
             {
-                IntPtr address = this.Call<IntPtr, NativeGetISteamUserStats>(
-                    this.Functions.GetISteamUserStats,
-                    this.ObjectAddress,
-                    user,
-                    pipe,
-                    nativeVersion.Handle);
+                var call = this.GetFunction<NativeGetISteamUserStats>(this.Functions.GetISteamUserStats);
+                IntPtr address = call(this.ObjectAddress, user, pipe, nativeVersion.Handle);
                 TClass result = new();
                 result.SetupFunctions(address);
                 return result;
@@ -160,11 +154,8 @@ namespace SAM.API.Wrappers
         {
             using (var nativeVersion = NativeStrings.StringToStringHandle(version))
             {
-                IntPtr address = this.Call<IntPtr, NativeGetISteamUtils>(
-                    this.Functions.GetISteamUtils,
-                    this.ObjectAddress,
-                    pipe,
-                    nativeVersion.Handle);
+                var call = this.GetFunction<NativeGetISteamUtils>(this.Functions.GetISteamUtils);
+                IntPtr address = call(this.ObjectAddress, pipe, nativeVersion.Handle);
                 TClass result = new();
                 result.SetupFunctions(address);
                 return result;
@@ -187,11 +178,8 @@ namespace SAM.API.Wrappers
         {
             using (var nativeVersion = NativeStrings.StringToStringHandle(version))
             {
-                IntPtr address = this.Call<IntPtr, NativeGetISteamApps>(
-                    this.Functions.GetISteamApps,
-                    user,
-                    pipe,
-                    nativeVersion.Handle);
+                var call = this.GetFunction<NativeGetISteamApps>(this.Functions.GetISteamApps);
+                IntPtr address = call(user, pipe, nativeVersion.Handle);
                 TClass result = new();
                 result.SetupFunctions(address);
                 return result;

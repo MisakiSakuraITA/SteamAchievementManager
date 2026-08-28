@@ -35,7 +35,8 @@ namespace SAM.API.Wrappers
 
         public bool IsSubscribedApp(uint gameId)
         {
-            return this.Call<bool, NativeIsSubscribedApp>(this.Functions.IsSubscribedApp, this.ObjectAddress, gameId);
+            var call = this.GetFunction<NativeIsSubscribedApp>(this.Functions.IsSubscribedApp);
+            return call(this.ObjectAddress, gameId);
         }
         #endregion
 
@@ -45,9 +46,8 @@ namespace SAM.API.Wrappers
 
         public string GetCurrentGameLanguage()
         {
-            var languagePointer = this.Call<IntPtr, NativeGetCurrentGameLanguage>(
-                this.Functions.GetCurrentGameLanguage,
-                this.ObjectAddress);
+            var call = this.GetFunction<NativeGetCurrentGameLanguage>(this.Functions.GetCurrentGameLanguage);
+            var languagePointer = call(this.ObjectAddress);
             return NativeStrings.PointerToString(languagePointer);
         }
         #endregion

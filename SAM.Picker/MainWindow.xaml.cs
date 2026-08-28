@@ -37,7 +37,6 @@ namespace SAM.Picker
 {
     public partial class MainWindow : ThemedWindow
     {
-        private const int _CapsuleDecodeWidth = 228;
         private const long _CapsuleCacheBudgetBytes = 80L * 1024 * 1024;
         private const int _MaximumConcurrentCapsuleLoads = 6;
 

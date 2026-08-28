@@ -66,15 +66,5 @@ namespace SAM.API
         {
             return (TDelegate)((object)this.GetDelegate<TDelegate>(pointer));
         }
-
-        protected void Call<TDelegate>(IntPtr pointer, params object[] args)
-        {
-            this.GetDelegate<TDelegate>(pointer).DynamicInvoke(args);
-        }
-
-        protected TReturn Call<TReturn, TDelegate>(IntPtr pointer, params object[] args)
-        {
-            return (TReturn)this.GetDelegate<TDelegate>(pointer).DynamicInvoke(args);
-        }
     }
 }

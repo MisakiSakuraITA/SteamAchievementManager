@@ -57,6 +57,13 @@ namespace SAM.Core.ViewModels
         public int Permission { get; }
 
         /// <summary>Steam refuses writes to these; the editor shows them read-only.</summary>
+        /// <remarks>
+        /// Only bit 1 (0b10) of a stat's Permission marks it as restricted. Unlike an
+        /// achievement's Permission (masked with 3, see
+        /// <see cref="AchievementViewModel.IsProtected"/>), a stat's bit 0 is unrelated schema
+        /// bookkeeping and does not indicate Steam restricts writes to it, so including it here
+        /// would flag stats as protected that are not.
+        /// </remarks>
         public bool IsProtected => (this.Permission & 2) != 0;
 
         public abstract bool IsIncrementOnly { get; }

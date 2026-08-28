@@ -34,7 +34,8 @@ namespace SAM.API.Wrappers
 
         public int GetConnectedUniverse()
         {
-            return this.Call<int, NativeGetConnectedUniverse>(this.Functions.GetConnectedUniverse, this.ObjectAddress);
+            var call = this.GetFunction<NativeGetConnectedUniverse>(this.Functions.GetConnectedUniverse);
+            return call(this.ObjectAddress);
         }
         #endregion
 
@@ -44,7 +45,8 @@ namespace SAM.API.Wrappers
 
         public string GetIPCountry()
         {
-            var result = this.Call<IntPtr, NativeGetIPCountry>(this.Functions.GetIPCountry, this.ObjectAddress);
+            var call = this.GetFunction<NativeGetIPCountry>(this.Functions.GetIPCountry);
+            var result = call(this.ObjectAddress);
             return NativeStrings.PointerToString(result);
         }
         #endregion
@@ -83,7 +85,8 @@ namespace SAM.API.Wrappers
 
         public uint GetAppId()
         {
-            return this.Call<uint, NativeGetAppId>(this.Functions.GetAppID, this.ObjectAddress);
+            var call = this.GetFunction<NativeGetAppId>(this.Functions.GetAppID);
+            return call(this.ObjectAddress);
         }
         #endregion
     }

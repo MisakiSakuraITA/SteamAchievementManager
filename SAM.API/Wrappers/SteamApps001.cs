@@ -43,13 +43,8 @@ namespace SAM.API.Wrappers
             {
                 const int valueLength = 1024;
                 var valuePointer = Marshal.AllocHGlobal(valueLength);
-                int result = this.Call<int, NativeGetAppData>(
-                    this.Functions.GetAppData,
-                    this.ObjectAddress,
-                    appId,
-                    nativeHandle.Handle,
-                    valuePointer,
-                    valueLength);
+                var call = this.GetFunction<NativeGetAppData>(this.Functions.GetAppData);
+                int result = call(this.ObjectAddress, appId, nativeHandle.Handle, valuePointer, valueLength);
                 var value = result == 0 ? null : NativeStrings.PointerToString(valuePointer, valueLength);
                 Marshal.FreeHGlobal(valuePointer);
                 return value;
