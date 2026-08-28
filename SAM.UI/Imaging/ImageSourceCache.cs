@@ -149,7 +149,11 @@ namespace SAM.UI.Imaging
 
         private async Task<ImageSource> LoadAsync(string identity, Uri uri, int decodeWidth)
         {
-            var data = await this._Assets.GetAsync(identity, uri).ConfigureAwait(true);
+            // False rather than true: the asset fetch and the decode below are both pure CPU
+            // and I/O work with no need to be on the UI thread, and the caller (CachedImage)
+            // already marshals its own continuation back with its own ConfigureAwait(true).
+            // Resuming here instead would mean every cache miss decodes on the dispatcher.
+            var data = await this._Assets.GetAsync(identity, uri).ConfigureAwait(false);
             if (data == null)
             {
                 return null;
@@ -170,8 +174,10 @@ namespace SAM.UI.Imaging
                 return null;
             }
 
-            this.Store(identity, decoded);
-            return decoded;
+            // Store reports whichever instance actually ended up cached for this identity --
+            // its own, or another caller's if one raced it and won -- so every caller shares
+            // exactly one decoded bitmap per identity rather than each holding its own copy.
+            return this.Store(identity, decoded);
         }
 
         private static ImageSource Decode(byte[] data, int decodeWidth)
@@ -229,13 +235,33 @@ namespace SAM.UI.Imaging
             return 0;
         }
 
-        private void Store(string identity, ImageSource image)
+        /// <summary>
+        /// Adds a decoded image to the cache, or shares whichever instance is already there.
+        /// </summary>
+        /// <returns>
+        /// The image now on record for <paramref name="identity"/>: <paramref name="image"/>
+        /// itself, unless a concurrent decode of the same identity already won and is
+        /// returned instead, or the cache has been disposed and <paramref name="image"/> is
+        /// handed straight back since there is nowhere left to put it.
+        /// </returns>
+        private ImageSource Store(string identity, ImageSource image)
         {
             lock (this._Lock)
             {
-                if (this._IsDisposed == true || this._Index.ContainsKey(identity) == true)
+                if (this._IsDisposed == true)
                 {
-                    return;
+                    return image;
+                }
+
+                if (this._Index.TryGetValue(identity, out var existingNode) == true)
+                {
+                    // Two callers can race to decode the same identity -- one waiting on the
+                    // network while a second, later request already found it on disk. Sharing
+                    // the winner's instance is what makes every caller of GetAsync hold the
+                    // same bitmap rather than each keeping an uncounted copy of it.
+                    this._Recency.Remove(existingNode);
+                    this._Recency.AddFirst(existingNode);
+                    return existingNode.Value.Image;
                 }
 
                 var size = EstimateBytes(image);
@@ -255,6 +281,8 @@ namespace SAM.UI.Imaging
                     this._Index.Remove(oldest.Value.Identity);
                     this._SizeInBytes -= oldest.Value.SizeInBytes;
                 }
+
+                return image;
             }
         }
 

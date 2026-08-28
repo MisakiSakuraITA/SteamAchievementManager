@@ -46,6 +46,7 @@ namespace SAM.Picker
             }
 
             this._SteamClient = new();
+            this._SteamClient.CallbackFaulted += OnCallbackFaulted;
             try
             {
                 this._SteamClient.Initialize(0);
@@ -79,10 +80,23 @@ namespace SAM.Picker
             this._SteamLibrary?.Dispose();
             this._SteamLibrary = null;
 
+            if (this._SteamClient != null)
+            {
+                this._SteamClient.CallbackFaulted -= OnCallbackFaulted;
+            }
             this._SteamClient?.Dispose();
             this._SteamClient = null;
 
             base.OnExit(e);
+        }
+
+        /// <summary>
+        /// A callback subscriber threw. The pump isolated it and kept running, so this is
+        /// purely a report -- without it, the fault would otherwise vanish with no trace.
+        /// </summary>
+        private static void OnCallbackFaulted(Exception exception)
+        {
+            SAM.UI.CrashGuard.ReportCallbackFault(exception);
         }
 
         private static bool IsRunningFromSteamDirectory()

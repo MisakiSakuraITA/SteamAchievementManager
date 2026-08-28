@@ -91,6 +91,17 @@ namespace SAM.UI
             e.SetObserved();
         }
 
+        /// <summary>
+        /// Reports a fault from a Steam callback subscriber. The pump isolates the fault and
+        /// keeps running regardless, so nothing here is actually recoverable from the user's
+        /// point of view -- this exists purely so a fault that would otherwise vanish silently
+        /// gets the same visibility as any other recovered error.
+        /// </summary>
+        public static void ReportCallbackFault(Exception exception)
+        {
+            Report(exception, isFatal: false);
+        }
+
         private static void Report(Exception exception, bool isFatal)
         {
             // A fault raised while a fault is already being reported would otherwise recurse

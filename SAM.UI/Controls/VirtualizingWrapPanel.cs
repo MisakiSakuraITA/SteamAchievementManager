@@ -348,10 +348,17 @@ namespace SAM.UI.Controls
                 return;
             }
 
-            var firstRow = Math.Max(0, (int)Math.Floor(this._Offset.Y / itemHeight));
-            var lastRow = Math.Max(
-                firstRow,
+            var visibleFirstRow = Math.Max(0, (int)Math.Floor(this._Offset.Y / itemHeight));
+            var visibleLastRow = Math.Max(
+                visibleFirstRow,
                 (int)Math.Ceiling((this._Offset.Y + Math.Max(itemHeight, this._Viewport.Height)) / itemHeight) - 1);
+
+            // One extra row held ready above and below what is strictly visible. Fast
+            // scrolling moves the visible range before the previous measure pass is even done
+            // settling, so without this buffer every frame tears down containers along one
+            // edge only to immediately recreate near-identical ones along the same edge.
+            var firstRow = Math.Max(0, visibleFirstRow - 1);
+            var lastRow = visibleLastRow + 1;
 
             var firstIndex = firstRow * this._ColumnCount;
             var lastIndex = Math.Min(itemCount - 1, ((lastRow + 1) * this._ColumnCount) - 1);

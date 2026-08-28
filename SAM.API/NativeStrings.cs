@@ -29,6 +29,13 @@ namespace SAM.API
 {
     internal class NativeStrings
     {
+        // Steam never hands back anything remotely close to this for the strings this class
+        // reads (language codes, country codes, achievement display text); it exists purely
+        // so an unterminated or corrupt buffer stops here instead of walking off the end of
+        // whatever memory follows it.
+        private const int _MaximumUnboundedStringLength = 8 * 1024;
+
+
         public sealed class StringHandle : SafeHandleZeroOrMinusOneIsInvalid
         {
             internal StringHandle(IntPtr preexistingHandle, bool ownsHandle)
@@ -73,25 +80,7 @@ namespace SAM.API
 
         public static unsafe string PointerToString(sbyte* bytes)
         {
-            if (bytes == null)
-            {
-                return null;
-            }
-
-            int running = 0;
-
-            var b = bytes;
-            if (*b == 0)
-            {
-                return string.Empty;
-            }
-
-            while ((*b++) != 0)
-            {
-                running++;
-            }
-
-            return new string(bytes, 0, running, Encoding.UTF8);
+            return PointerToString(bytes, _MaximumUnboundedStringLength);
         }
 
         public static unsafe string PointerToString(byte* bytes)
@@ -119,10 +108,13 @@ namespace SAM.API
                 return string.Empty;
             }
 
-            while ((*b++) != 0 &&
-                   running < length)
+            // Bounds-checked before dereferencing rather than after: the old order read one
+            // byte past the end of an unterminated buffer of exactly `length` bytes before
+            // ever noticing the bound had been reached.
+            while (running < length && *b != 0)
             {
                 running++;
+                b++;
             }
 
             return new string(bytes, 0, running, Encoding.UTF8);

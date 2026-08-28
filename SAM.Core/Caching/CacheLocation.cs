@@ -85,15 +85,53 @@ namespace SAM.Core.Caching
                 try
                 {
                     Directory.CreateDirectory(candidate);
-                    return candidate;
                 }
                 catch (Exception)
                 {
                     // Try the next candidate; caching is optional.
+                    continue;
+                }
+
+                if (IsWritable(candidate) == true)
+                {
+                    return candidate;
                 }
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// <see cref="Directory.CreateDirectory"/> succeeds on a directory that already exists
+        /// even when this process cannot write to it, which is exactly the shape of a locked-
+        /// down or roaming profile: the first candidate resolves as usable, every real write
+        /// afterwards fails silently, and the executable-adjacent fallback never gets a
+        /// chance. A genuine write-and-delete is the only way to actually tell.
+        /// </summary>
+        private static bool IsWritable(string directory)
+        {
+            var probePath = Path.Combine(directory, "." + Guid.NewGuid().ToString("N") + ".tmp");
+            try
+            {
+                using (FileStream stream = new(probePath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    stream.WriteByte(0);
+                }
+                File.Delete(probePath);
+                return true;
+            }
+            catch (Exception)
+            {
+                try
+                {
+                    File.Delete(probePath);
+                }
+                catch (Exception)
+                {
+                    // Best-effort cleanup only.
+                }
+                return false;
+            }
         }
 
         private static IEnumerable<string> EnumerateCandidates()

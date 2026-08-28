@@ -191,6 +191,12 @@ namespace SAM.Core.ViewModels
 
         public int ModifiedStatisticCount => this._AllStatistics.Count(s => s.IsModified);
 
+        /// <summary>
+        /// Achievements and statistics together, for a status chip that should not read "0
+        /// pending" while a statistic edit is what is actually staged.
+        /// </summary>
+        public int ModifiedCount => this.ModifiedAchievementCount + this.ModifiedStatisticCount;
+
         public bool IsModified => this.ModifiedAchievementCount > 0 || this.ModifiedStatisticCount > 0;
 
         public bool HasValidationErrors => this._AllStatistics.Any(s => s.HasError);
