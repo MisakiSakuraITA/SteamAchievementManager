@@ -35,6 +35,9 @@ namespace SAM.Core.ViewModels
     {
         private const string _IconHost = "https://cdn.steamstatic.com";
 
+        /// <summary>Below this, a rarity badge is called out as ultra-rare.</summary>
+        internal const double _UltraRareThreshold = 5.0;
+
         private readonly uint _AppId;
         private readonly SynchronizationContext _Context;
         private string _IconNormal;
@@ -43,6 +46,8 @@ namespace SAM.Core.ViewModels
         private bool _IsAchieved;
         private bool _IsUnlocked;
         private DateTime? _UnlockTime;
+        private bool _ShowSecretDetails;
+        private double? _RarityPercentage;
 
         public AchievementViewModel(uint appId, AchievementDefinition definition, bool isAchieved, DateTime? unlockTime)
         {
@@ -70,6 +75,62 @@ namespace SAM.Core.ViewModels
         public bool IsHidden { get; private set; }
 
         public int Permission { get; private set; }
+
+        /// <summary>
+        /// True while this achievement's real name, description and icon should be shown
+        /// even though it is still hidden and locked -- set from a hover or the manager's
+        /// "reveal hidden achievements" toggle. Has no effect once the achievement either
+        /// isn't hidden or has actually been earned; both already show their real details.
+        /// </summary>
+        public bool ShowSecretDetails
+        {
+            get => this._ShowSecretDetails;
+            set
+            {
+                if (this.Set(ref this._ShowSecretDetails, value) == false)
+                {
+                    return;
+                }
+
+                this.Raise(nameof(this.DisplayName), nameof(this.DisplayDescription), nameof(this.IconIdentity), nameof(this.IconUri));
+            }
+        }
+
+        /// <summary>
+        /// What is actually shown for the name: the real one, unless this is still a locked,
+        /// unrevealed secret, in which case a generic placeholder stands in for it so the
+        /// list doesn't spoil what earning it involves.
+        /// </summary>
+        public string DisplayName => this.IsObscured == false ? this.Name : "Hidden Achievement";
+
+        /// <summary>See <see cref="DisplayName"/>; the same obscuring rule for the description.</summary>
+        public string DisplayDescription => this.IsObscured == false
+            ? this.Description
+            : "This achievement is hidden until unlocked.";
+
+        /// <summary>
+        /// The globally-cached fraction of owners who have unlocked this achievement, as a
+        /// percentage in [0, 100]. Null until Steam has actually supplied one.
+        /// </summary>
+        public double? RarityPercentage
+        {
+            get => this._RarityPercentage;
+            internal set
+            {
+                if (this.Set(ref this._RarityPercentage, value) == true)
+                {
+                    this.Raise(nameof(this.IsUltraRare), nameof(this.RarityText));
+                }
+            }
+        }
+
+        /// <summary>True once a known rarity is under the ultra-rare threshold.</summary>
+        public bool IsUltraRare => this._RarityPercentage.HasValue == true && this._RarityPercentage.Value < _UltraRareThreshold;
+
+        /// <summary>A short "Rare: 1.4%" label for the badge, or null when rarity isn't known yet.</summary>
+        public string RarityText => this._RarityPercentage.HasValue == false
+            ? null
+            : _($"{(this.IsUltraRare == true ? "Rare" : "Unlocked by")}: {this._RarityPercentage.Value:0.0}%");
 
         /// <summary>
         /// Steam marks some achievements as owner-only. They are shown, but refuse to change.
@@ -184,7 +245,12 @@ namespace SAM.Core.ViewModels
         {
             this.IsAchieved = this._IsUnlocked;
             this.UnlockTime = unlockTime;
-            this.Raise(nameof(this.IsModified), nameof(this.IconIdentity), nameof(this.IconUri));
+            this.Raise(
+                nameof(this.IsModified),
+                nameof(this.DisplayName),
+                nameof(this.DisplayDescription),
+                nameof(this.IconIdentity),
+                nameof(this.IconUri));
         }
 
         /// <summary>
@@ -224,6 +290,8 @@ namespace SAM.Core.ViewModels
             this.Raise(
                 nameof(this.Name),
                 nameof(this.Description),
+                nameof(this.DisplayName),
+                nameof(this.DisplayDescription),
                 nameof(this.IsHidden),
                 nameof(this.Permission),
                 nameof(this.IsProtected),
@@ -299,7 +367,22 @@ namespace SAM.Core.ViewModels
             context.Post(_ => this.Raise(nameof(this.IsUnlocked)), null);
         }
 
-        private string CurrentIconName => this._IsAchieved == true ? this._IconNormal : this._IconLocked;
+        /// <summary>
+        /// True while the real name/description are replaced by a generic placeholder:
+        /// still hidden in the schema, not yet earned, and nothing has revealed it.
+        /// </summary>
+        private bool IsObscured => this.IsHidden == true && this._IsAchieved == false && this._ShowSecretDetails == false;
+
+        private string CurrentIconName
+        {
+            get
+            {
+                // A hidden achievement's real icon is only shown once earned or revealed;
+                // everything else follows the ordinary achieved/locked art.
+                var showRealArt = this._IsAchieved == true || (this.IsHidden == true && this._ShowSecretDetails == true);
+                return showRealArt == true ? this._IconNormal : this._IconLocked;
+            }
+        }
 
         public override string ToString() => $"{this.Name} ({(this._IsUnlocked ? "unlocked" : "locked")})";
     }

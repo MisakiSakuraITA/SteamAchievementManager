@@ -214,5 +214,47 @@ namespace SAM.API.Wrappers
             return call(this.ObjectAddress, achievementsToo);
         }
         #endregion
+
+        #region RequestGlobalAchievementPercentages
+        [UnmanagedFunctionPointer(CallingConvention.ThisCall)]
+        private delegate CallHandle NativeRequestGlobalAchievementPercentages(IntPtr self);
+
+        /// <summary>
+        /// Asks Steam to populate its local cache of global unlock percentages for this app.
+        /// </summary>
+        /// <remarks>
+        /// This deliberately does not correlate the call result the native call returns, the
+        /// way <see cref="RequestUserStats"/> already forgoes a call result of its own in
+        /// favour of the ordinary callback it also triggers. A caller here instead polls
+        /// <see cref="GetAchievementAchievedPercent"/> until it starts returning data, so
+        /// nothing depends on a second, purely additive interop surface just to learn when
+        /// the cache is ready.
+        /// </remarks>
+        public CallHandle RequestGlobalAchievementPercentages()
+        {
+            var call = this.GetFunction<NativeRequestGlobalAchievementPercentages>(this.Functions.RequestGlobalAchievementPercentages);
+            return call(this.ObjectAddress);
+        }
+        #endregion
+
+        #region GetAchievementAchievedPercent
+        [UnmanagedFunctionPointer(CallingConvention.ThisCall)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        private delegate bool NativeGetAchievementAchievedPercent(IntPtr self, IntPtr name, out float percent);
+
+        /// <summary>
+        /// Reads the globally-cached unlock percentage for one achievement. Returns false
+        /// until <see cref="RequestGlobalAchievementPercentages"/> has completed for this app,
+        /// or for an unrecognised achievement id.
+        /// </summary>
+        public bool GetAchievementAchievedPercent(string name, out float percent)
+        {
+            using (var nativeName = NativeStrings.StringToStringHandle(name))
+            {
+                var call = this.GetFunction<NativeGetAchievementAchievedPercent>(this.Functions.GetAchievementAchievedPercent);
+                return call(this.ObjectAddress, nativeName.Handle, out percent);
+            }
+        }
+        #endregion
     }
 }

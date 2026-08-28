@@ -77,5 +77,19 @@ namespace SAM.Core.Steam
         bool StoreStats();
 
         bool ResetAllStats(bool includeAchievements);
+
+        /// <summary>
+        /// Asks Steam to populate its local cache of global unlock percentages for this app.
+        /// Fire-and-forget: the result is read back later, per achievement, with
+        /// <see cref="TryGetGlobalAchievementPercentage"/>.
+        /// </summary>
+        void RequestGlobalAchievementPercentages();
+
+        /// <summary>
+        /// Reads the globally-cached unlock percentage for one achievement, as a percentage
+        /// in [0, 100]. False until a prior <see cref="RequestGlobalAchievementPercentages"/>
+        /// has completed for this app, or for an unrecognised achievement id.
+        /// </summary>
+        bool TryGetGlobalAchievementPercentage(string id, out double percentage);
     }
 }

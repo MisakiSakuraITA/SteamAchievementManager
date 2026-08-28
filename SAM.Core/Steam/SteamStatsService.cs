@@ -108,6 +108,21 @@ namespace SAM.Core.Steam
         public bool ResetAllStats(bool includeAchievements)
             => this._Client.SteamUserStats.ResetAllStats(includeAchievements);
 
+        public void RequestGlobalAchievementPercentages()
+            => this._Client.SteamUserStats.RequestGlobalAchievementPercentages();
+
+        public bool TryGetGlobalAchievementPercentage(string id, out double percentage)
+        {
+            if (this._Client.SteamUserStats.GetAchievementAchievedPercent(id, out var percent) == false)
+            {
+                percentage = 0d;
+                return false;
+            }
+
+            percentage = percent;
+            return true;
+        }
+
         private void OnUserStatsReceived(APITypes.UserStatsReceived param)
         {
             if (this._IsDisposed == true)

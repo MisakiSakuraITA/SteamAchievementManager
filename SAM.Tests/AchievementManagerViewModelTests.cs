@@ -31,6 +31,31 @@ namespace SAM.Tests
             return new UserGameStatsSchema(definitions, stats);
         }
 
+        /// <summary>
+        /// Three unprotected, initially-locked achievements plus one stat -- unlike
+        /// <see cref="BuildSchema"/>, every achievement here can actually be staged unlocked,
+        /// which the queued-store tests need for more than one achievement at a time.
+        /// </summary>
+        private static UserGameStatsSchema BuildQueueableSchema(FakeStats steam)
+        {
+            steam.SeedAchievement("ACH_A", false);
+            steam.SeedAchievement("ACH_B", false);
+            steam.SeedAchievement("ACH_C", false);
+            steam.SeedInt("kills", 7);
+
+            var definitions = new List<AchievementDefinition>
+            {
+                new() { Id = "ACH_A", Name = "Alpha", Description = "first", Permission = 0 },
+                new() { Id = "ACH_B", Name = "Beta", Description = "second", Permission = 0 },
+                new() { Id = "ACH_C", Name = "Gamma", Description = "third", Permission = 0 },
+            };
+            var stats = new List<StatDefinition>
+            {
+                new IntegerStatDefinition { Id = "kills", DisplayName = "Kills", MinValue = 0, MaxValue = 100 },
+            };
+            return new UserGameStatsSchema(definitions, stats);
+        }
+
         [Fact]
         public void MissingSchemaFailsGracefullyWithoutThrowing()
         {
@@ -465,6 +490,332 @@ namespace SAM.Tests
             manager.Filter = AchievementFilter.Unlocked;
             Assert.Single(events);
             Assert.Equal(NotifyCollectionChangedAction.Reset, events[0]);
+        }
+
+        // ============================ sorting ============================
+
+        [Fact]
+        public void DefaultSortOrderPreservesSchemaOrder()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(BuildSchema(steam));
+
+            Assert.Equal(new[] { "ACH_A", "ACH_B", "ACH_C" }, manager.Achievements.Select(a => a.Id));
+        }
+
+        [Fact]
+        public void SortOrderAlphabeticalOrdersByName()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(BuildSchema(steam));
+
+            manager.SortOrder = AchievementSortOrder.Alphabetical;
+
+            // Alpha, Beta, Gamma -- already alphabetical, so this also proves the sort did
+            // not just leave the schema order untouched by coincidence.
+            Assert.Equal(new[] { "Alpha", "Beta", "Gamma" }, manager.Achievements.Select(a => a.Name));
+        }
+
+        [Fact]
+        public void SortOrderUnlockStatusPutsLockedAchievementsFirst()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(BuildSchema(steam)); // ACH_B starts unlocked; A and C start locked
+
+            manager.SortOrder = AchievementSortOrder.UnlockStatus;
+
+            var ids = manager.Achievements.Select(a => a.Id).ToList();
+            Assert.Equal(new[] { "ACH_A", "ACH_C", "ACH_B" }, ids);
+        }
+
+        [Fact]
+        public void SortOrderRarityPutsTheRarestFirstAndUnknownRarityLast()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(BuildSchema(steam));
+
+            var a = manager.Achievements.Single(x => x.Id == "ACH_A");
+            var b = manager.Achievements.Single(x => x.Id == "ACH_B");
+            // ACH_C is deliberately left without a rarity value.
+            a.RarityPercentage = 12.0;
+            b.RarityPercentage = 1.4;
+
+            manager.SortOrder = AchievementSortOrder.Rarity;
+
+            Assert.Equal(new[] { "ACH_B", "ACH_A", "ACH_C" }, manager.Achievements.Select(x => x.Id));
+        }
+
+        [Fact]
+        public void SortOrderHiddenStatusPutsHiddenAchievementsFirst()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            steam.SeedAchievement("ACH_A", false);
+            steam.SeedAchievement("ACH_B", false);
+            var definitions = new List<AchievementDefinition>
+            {
+                new() { Id = "ACH_A", Name = "Alpha", Permission = 0, IsHidden = false },
+                new() { Id = "ACH_B", Name = "Beta", Permission = 0, IsHidden = true },
+            };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(new UserGameStatsSchema(definitions, Enumerable.Empty<StatDefinition>()));
+
+            manager.SortOrder = AchievementSortOrder.HiddenStatus;
+
+            Assert.Equal(new[] { "ACH_B", "ACH_A" }, manager.Achievements.Select(a => a.Id));
+        }
+
+        // ============================ filtering ============================
+
+        [Fact]
+        public void FilterHiddenShowsOnlyHiddenAchievements()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            steam.SeedAchievement("ACH_A", false);
+            steam.SeedAchievement("ACH_B", false);
+            var definitions = new List<AchievementDefinition>
+            {
+                new() { Id = "ACH_A", Name = "Alpha", Permission = 0, IsHidden = false },
+                new() { Id = "ACH_B", Name = "Beta", Permission = 0, IsHidden = true },
+            };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(new UserGameStatsSchema(definitions, Enumerable.Empty<StatDefinition>()));
+
+            manager.Filter = AchievementFilter.Hidden;
+
+            Assert.Single(manager.Achievements);
+            Assert.Equal("ACH_B", manager.Achievements[0].Id);
+        }
+
+        [Fact]
+        public void FilterUltraRareShowsOnlyAchievementsUnderTheThreshold()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(BuildSchema(steam));
+
+            manager.Achievements.Single(a => a.Id == "ACH_A").RarityPercentage = 1.4;
+            manager.Achievements.Single(a => a.Id == "ACH_B").RarityPercentage = 42.0;
+            // ACH_C is left with no rarity value at all.
+
+            manager.Filter = AchievementFilter.UltraRare;
+
+            Assert.Single(manager.Achievements);
+            Assert.Equal("ACH_A", manager.Achievements[0].Id);
+        }
+
+        [Fact]
+        public void SortAndFilterChangesPreserveAPendingEdit()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(BuildSchema(steam));
+
+            manager.Achievements.First(a => a.Id == "ACH_A").IsUnlocked = true;
+            Assert.True(manager.IsModified);
+
+            manager.SortOrder = AchievementSortOrder.Alphabetical;
+            manager.Filter = AchievementFilter.All;
+            manager.SortOrder = AchievementSortOrder.Rarity;
+            manager.Filter = AchievementFilter.Locked;
+            manager.Filter = AchievementFilter.All;
+
+            Assert.True(manager.IsModified);
+            Assert.True(manager.Achievements.First(a => a.Id == "ACH_A").IsUnlocked);
+        }
+
+        // ============================ hidden reveal ============================
+
+        [Fact]
+        public void RevealHiddenAchievementsTogglePropagatesToEveryAchievement()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            steam.SeedAchievement("ACH_A", false);
+            var definitions = new List<AchievementDefinition>
+            {
+                new() { Id = "ACH_A", Name = "Alpha", Permission = 0, IsHidden = true },
+            };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(new UserGameStatsSchema(definitions, Enumerable.Empty<StatDefinition>()));
+
+            var achievement = manager.Achievements[0];
+            Assert.NotEqual("Alpha", achievement.DisplayName);
+
+            manager.RevealHiddenAchievements = true;
+            Assert.Equal("Alpha", achievement.DisplayName);
+
+            manager.RevealHiddenAchievements = false;
+            Assert.NotEqual("Alpha", achievement.DisplayName);
+        }
+
+        [Fact]
+        public void ANewlyLoadedAchievementRespectsAnAlreadyActiveRevealToggle()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            steam.SeedAchievement("ACH_A", false);
+            var definitions = new List<AchievementDefinition>
+            {
+                new() { Id = "ACH_A", Name = "Alpha", Permission = 0, IsHidden = true },
+            };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.RevealHiddenAchievements = true;
+
+            manager.Load(new UserGameStatsSchema(definitions, Enumerable.Empty<StatDefinition>()));
+
+            Assert.Equal("Alpha", manager.Achievements[0].DisplayName);
+        }
+
+        // ============================ rarity population ============================
+
+        [Fact]
+        public async Task LoadRequestsGlobalPercentagesAndPopulatesThemOnceAvailable()
+        {
+            FakeStats steam = new() { InstallPath = null, GlobalPercentagesAvailable = false };
+            steam.SeedGlobalPercentage("ACH_A", 1.4);
+            steam.SeedGlobalPercentage("ACH_B", 55.0);
+            steam.SeedGlobalPercentage("ACH_C", 30.0);
+
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.RarityPollIntervalForTesting = TimeSpan.FromMilliseconds(5);
+            manager.Load(BuildSchema(steam));
+
+            Assert.True(steam.RequestGlobalAchievementPercentagesCallCount >= 1);
+            Assert.Null(manager.Achievements.Single(a => a.Id == "ACH_A").RarityPercentage);
+
+            // The cache "arrives" only now, matching how Steam answers asynchronously.
+            steam.GlobalPercentagesAvailable = true;
+
+            var achievement = manager.Achievements.Single(a => a.Id == "ACH_A");
+            for (var i = 0; i < 100 && achievement.RarityPercentage.HasValue == false; i++)
+            {
+                await Task.Delay(10);
+            }
+
+            Assert.Equal(1.4, achievement.RarityPercentage);
+            Assert.Equal(55.0, manager.Achievements.Single(a => a.Id == "ACH_B").RarityPercentage);
+        }
+
+        [Fact]
+        public async Task RarityPollingGivesUpQuietlyWhenNothingEverBecomesAvailable()
+        {
+            FakeStats steam = new() { InstallPath = null, GlobalPercentagesAvailable = false };
+
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.RarityPollIntervalForTesting = TimeSpan.FromMilliseconds(2);
+            manager.Load(BuildSchema(steam));
+
+            // Ten attempts at 2ms plus scheduling slack; generous so this isn't flaky.
+            await Task.Delay(500);
+
+            Assert.Null(manager.Achievements.Single(a => a.Id == "ACH_A").RarityPercentage);
+            Assert.False(manager.IsBusy);
+        }
+
+        // ============================ queued store ============================
+
+        [Fact]
+        public async Task QueuedStoreProcessesEachAchievementIndividually()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.QueuedStoreDelayForTesting = TimeSpan.FromMilliseconds(1);
+            manager.Load(BuildQueueableSchema(steam));
+
+            manager.Achievements.First(a => a.Id == "ACH_A").IsUnlocked = true;
+            manager.Achievements.First(a => a.Id == "ACH_C").IsUnlocked = true;
+
+            await manager.QueuedStoreCommand.ExecuteAsync(null);
+
+            Assert.Equal(new[] { "ACH_A", "ACH_C" }, steam.StoredAchievements);
+            // One StoreStats call per achievement, not one for the whole batch.
+            Assert.Equal(2, steam.StoreCallCount);
+            Assert.False(manager.IsModified);
+            Assert.Equal(2, manager.QueuedStoreCompleted);
+            Assert.Equal(2, manager.QueuedStoreTotal);
+            Assert.False(manager.IsQueuedStoreRunning);
+        }
+
+        [Fact]
+        public async Task QueuedStoreIncludesPendingStatisticsAlongsideTheFirstAchievement()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.QueuedStoreDelayForTesting = TimeSpan.FromMilliseconds(1);
+            manager.Load(BuildQueueableSchema(steam));
+
+            manager.Achievements.First(a => a.Id == "ACH_A").IsUnlocked = true;
+            manager.Statistics[0].ValueText = "55";
+
+            await manager.QueuedStoreCommand.ExecuteAsync(null);
+
+            Assert.Equal(new[] { "kills" }, steam.StoredStats);
+            Assert.False(manager.IsModified);
+        }
+
+        [Fact]
+        public async Task QueuedStoreCanBeCancelledPartwayThroughWithoutLosingWhatAlreadyStored()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.QueuedStoreDelayForTesting = TimeSpan.FromMilliseconds(200);
+            manager.Load(BuildQueueableSchema(steam));
+
+            manager.Achievements.First(a => a.Id == "ACH_A").IsUnlocked = true;
+            manager.Achievements.First(a => a.Id == "ACH_C").IsUnlocked = true;
+
+            var run = manager.QueuedStoreCommand.ExecuteAsync(null);
+
+            // Give the first item time to store, then cancel before the delay finishes.
+            await Task.Delay(50);
+            Assert.True(manager.IsQueuedStoreRunning);
+            manager.CancelQueuedStoreCommand.Execute(null);
+
+            await run;
+
+            Assert.Single(steam.StoredAchievements);
+            Assert.Equal("ACH_A", steam.StoredAchievements[0]);
+            Assert.False(manager.IsQueuedStoreRunning);
+
+            // The un-stored achievement's edit is still pending, not silently discarded.
+            Assert.True(manager.IsModified);
+            Assert.True(manager.Achievements.First(a => a.Id == "ACH_C").IsModified);
+        }
+
+        [Fact]
+        public async Task QueuedStoreStopsOnAStoreFailureAndLeavesTheEditPending()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.QueuedStoreDelayForTesting = TimeSpan.FromMilliseconds(1);
+            manager.Load(BuildQueueableSchema(steam));
+
+            manager.Achievements.First(a => a.Id == "ACH_A").IsUnlocked = true;
+            manager.Achievements.First(a => a.Id == "ACH_C").IsUnlocked = true;
+
+            var failures = new List<string>();
+            manager.ErrorRaised += failures.Add;
+
+            steam.StoreSucceeds = false;
+
+            await manager.QueuedStoreCommand.ExecuteAsync(null);
+
+            Assert.NotEmpty(failures);
+            Assert.False(manager.IsQueuedStoreRunning);
+            Assert.Equal(0, manager.QueuedStoreCompleted);
+            Assert.True(manager.IsModified);
+        }
+
+        [Fact]
+        public void QueuedStoreCommandCannotExecuteWithNothingPending()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(BuildSchema(steam));
+
+            Assert.False(manager.QueuedStoreCommand.CanExecute(null));
         }
     }
 }

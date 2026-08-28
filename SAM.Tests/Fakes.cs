@@ -77,6 +77,7 @@ namespace SAM.Tests
         private readonly Dictionary<string, DateTime?> _UnlockTimes = new();
         private readonly Dictionary<string, int> _IntStats = new();
         private readonly Dictionary<string, float> _FloatStats = new();
+        private readonly Dictionary<string, double> _GlobalPercentages = new();
 
         public readonly List<string> StoredAchievements = new();
         public readonly List<string> StoredStats = new();
@@ -86,6 +87,16 @@ namespace SAM.Tests
         public int StoreCallCount;
         public int ResetCallCount;
         public bool LastResetIncludedAchievements;
+
+        /// <summary>
+        /// Whether a seeded global percentage is actually readable yet, mirroring how the
+        /// real cache isn't populated until Steam finishes answering
+        /// RequestGlobalAchievementPercentages. Defaults true so tests that don't care about
+        /// that asynchrony can seed a value and read it back immediately.
+        /// </summary>
+        public bool GlobalPercentagesAvailable = true;
+
+        public int RequestGlobalAchievementPercentagesCallCount;
 
         public uint AppId { get; set; } = 480;
 
@@ -112,6 +123,8 @@ namespace SAM.Tests
         public void SeedInt(string id, int value) => this._IntStats[id] = value;
 
         public void SeedFloat(string id, float value) => this._FloatStats[id] = value;
+
+        public void SeedGlobalPercentage(string id, double percentage) => this._GlobalPercentages[id] = percentage;
 
         public bool RequestUserStats() => true;
 
@@ -177,6 +190,19 @@ namespace SAM.Tests
         {
             this.ResetCallCount++;
             this.LastResetIncludedAchievements = includeAchievements;
+            return true;
+        }
+
+        public void RequestGlobalAchievementPercentages() => this.RequestGlobalAchievementPercentagesCallCount++;
+
+        public bool TryGetGlobalAchievementPercentage(string id, out double percentage)
+        {
+            if (this.GlobalPercentagesAvailable == false ||
+                this._GlobalPercentages.TryGetValue(id, out percentage) == false)
+            {
+                percentage = 0d;
+                return false;
+            }
             return true;
         }
 

@@ -58,6 +58,11 @@
     <Color x:Key="Color.Warning">#FFE09750</Color>
     <Color x:Key="Color.Danger">#FFE0605F</Color>
 
+    <!-- A distinct gold, deliberately not orange like Warning, for calling out an
+         ultra-rare achievement. -->
+    <Color x:Key="Color.Rarity">#FFE8C55E</Color>
+    <Color x:Key="Color.Rarity.Dim">#FF3D3319</Color>
+
     <SolidColorBrush x:Key="Brush.Bg.Base" Color="{StaticResource Color.Bg.Base}" />
     <SolidColorBrush x:Key="Brush.Bg.Surface" Color="{StaticResource Color.Bg.Surface}" />
     <SolidColorBrush x:Key="Brush.Bg.Elevated" Color="{StaticResource Color.Bg.Elevated}" />
@@ -80,6 +85,8 @@
     <SolidColorBrush x:Key="Brush.Success" Color="{StaticResource Color.Success}" />
     <SolidColorBrush x:Key="Brush.Warning" Color="{StaticResource Color.Warning}" />
     <SolidColorBrush x:Key="Brush.Danger" Color="{StaticResource Color.Danger}" />
+    <SolidColorBrush x:Key="Brush.Rarity" Color="{StaticResource Color.Rarity}" />
+    <SolidColorBrush x:Key="Brush.Rarity.Dim" Color="{StaticResource Color.Rarity.Dim}" />
 
     <!-- Metrics -->
     <CornerRadius x:Key="Radius.Small">3</CornerRadius>

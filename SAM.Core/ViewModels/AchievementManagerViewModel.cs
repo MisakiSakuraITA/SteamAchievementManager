@@ -37,6 +37,18 @@ namespace SAM.Core.ViewModels
         All,
         Locked,
         Unlocked,
+        Hidden,
+        UltraRare,
+    }
+
+    public enum AchievementSortOrder
+    {
+        /// <summary>The order the schema declared them in.</summary>
+        Default,
+        Alphabetical,
+        UnlockStatus,
+        Rarity,
+        HiddenStatus,
     }
 
     /// <summary>
@@ -54,10 +66,41 @@ namespace SAM.Core.ViewModels
 
         private string _SearchText = "";
         private AchievementFilter _Filter = AchievementFilter.All;
+        private AchievementSortOrder _SortOrder = AchievementSortOrder.Default;
         private string _Status = "Retrieving stat information...";
         private bool _IsBusy = true;
         private bool _AllowStatEditing;
         private bool _IsSteamConnected = true;
+        private bool _RevealHiddenAchievements;
+
+        private CancellationTokenSource _QueuedStoreCancellation;
+        private bool _IsQueuedStoreRunning;
+        private int _QueuedStoreCompleted;
+        private int _QueuedStoreTotal;
+
+        /// <summary>
+        /// Pause between individual unlocks in a queued store, purely so progress is legible
+        /// and there is a real window to cancel in -- not a public setting, so it stays a UI
+        /// nicety rather than becoming a dial for pacing unlocks to look like they happened
+        /// during actual play. Settable internally only, and per-instance, so a test can
+        /// shrink it without leaking that into any other test's view model.
+        /// </summary>
+        private TimeSpan _QueuedStoreDelay = TimeSpan.FromSeconds(1);
+
+        internal TimeSpan QueuedStoreDelayForTesting
+        {
+            set => this._QueuedStoreDelay = value;
+        }
+
+        /// <summary>How often <see cref="PopulateRarityAsync"/> re-checks Steam's cache.
+        /// Settable internally only, and per-instance, for the same reason as
+        /// <see cref="QueuedStoreDelayForTesting"/>.</summary>
+        private TimeSpan _RarityPollInterval = TimeSpan.FromMilliseconds(500);
+
+        internal TimeSpan RarityPollIntervalForTesting
+        {
+            set => this._RarityPollInterval = value;
+        }
 
         internal const string _DisconnectedMessage =
             "Steam is no longer running. Please launch Steam and restart the application.";
@@ -82,6 +125,8 @@ namespace SAM.Core.ViewModels
             this.LockAllCommand = new(() => this.SetAll(false), this.CanReachSteam);
             this.InvertAllCommand = new(this.InvertAll, this.CanReachSteam);
             this.ResetAllCommand = new(this.ResetAllAsync, this.CanReachSteam);
+            this.QueuedStoreCommand = new(this.RunQueuedStoreAsync, () => this.CanReachSteam() && this.IsModified == true);
+            this.CancelQueuedStoreCommand = new(this.CancelQueuedStore, () => this._IsQueuedStoreRunning == true);
 
             this._Steam.UserStatsReceived += this.OnUserStatsReceived;
             this._Steam.Disconnected += this.OnSteamDisconnected;
@@ -108,6 +153,12 @@ namespace SAM.Core.ViewModels
         public RelayCommand InvertAllCommand { get; }
 
         public AsyncRelayCommand ResetAllCommand { get; }
+
+        /// <summary>Stores pending achievements one at a time instead of all at once, so a
+        /// large batch can be watched or stopped partway through.</summary>
+        public AsyncRelayCommand QueuedStoreCommand { get; }
+
+        public RelayCommand CancelQueuedStoreCommand { get; }
 
         /// <summary>Raised with a message the shell should show as an error.</summary>
         public event Action<string> ErrorRaised;
@@ -149,11 +200,91 @@ namespace SAM.Core.ViewModels
             }
         }
 
+        public AchievementSortOrder SortOrder
+        {
+            get => this._SortOrder;
+            set
+            {
+                if (this.Set(ref this._SortOrder, value) == true)
+                {
+                    this.ApplyFilter();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Reveals every hidden achievement's real name, description and icon, in place of
+        /// the ordinary hover-to-peek at just one. Toggling this off returns each achievement
+        /// that isn't being hovered right now to its normal obscured state.
+        /// </summary>
+        public bool RevealHiddenAchievements
+        {
+            get => this._RevealHiddenAchievements;
+            set
+            {
+                if (this.Set(ref this._RevealHiddenAchievements, value) == false)
+                {
+                    return;
+                }
+
+                foreach (var achievement in this._AllAchievements)
+                {
+                    achievement.ShowSecretDetails = value;
+                }
+            }
+        }
+
         public bool AllowStatEditing
         {
             get => this._AllowStatEditing;
             set => this.Set(ref this._AllowStatEditing, value);
         }
+
+        /// <summary>True while a queued store is actively working through pending achievements.</summary>
+        public bool IsQueuedStoreRunning
+        {
+            get => this._IsQueuedStoreRunning;
+            private set
+            {
+                if (this.Set(ref this._IsQueuedStoreRunning, value) == true)
+                {
+                    this.QueuedStoreCommand.RaiseCanExecuteChanged();
+                    this.CancelQueuedStoreCommand.RaiseCanExecuteChanged();
+                }
+            }
+        }
+
+        /// <summary>How many achievements the current (or most recent) queued store has
+        /// finished storing.</summary>
+        public int QueuedStoreCompleted
+        {
+            get => this._QueuedStoreCompleted;
+            private set
+            {
+                if (this.Set(ref this._QueuedStoreCompleted, value) == true)
+                {
+                    this.Raise(nameof(this.QueuedStoreProgressPercentage));
+                }
+            }
+        }
+
+        /// <summary>How many achievements the current (or most recent) queued store started
+        /// with.</summary>
+        public int QueuedStoreTotal
+        {
+            get => this._QueuedStoreTotal;
+            private set
+            {
+                if (this.Set(ref this._QueuedStoreTotal, value) == true)
+                {
+                    this.Raise(nameof(this.QueuedStoreProgressPercentage));
+                }
+            }
+        }
+
+        public double QueuedStoreProgressPercentage => this._QueuedStoreTotal == 0
+            ? 0d
+            : 100d * this._QueuedStoreCompleted / this._QueuedStoreTotal;
 
         public string Status
         {
@@ -383,7 +514,10 @@ namespace SAM.Core.ViewModels
                 }
                 else
                 {
-                    achievement = new(this._Steam.AppId, definition, isAchieved, unlockTime);
+                    achievement = new(this._Steam.AppId, definition, isAchieved, unlockTime)
+                    {
+                        ShowSecretDetails = this._RevealHiddenAchievements,
+                    };
                 }
 
                 achievement.Changed += this.OnAchievementChanged;
@@ -449,6 +583,83 @@ namespace SAM.Core.ViewModels
             // Having data is what ends the wait, whichever route the schema arrived by.
             this.IsBusy = false;
             this.UpdateStatus();
+
+            this.BeginPopulatingRarity();
+        }
+
+        /// <summary>
+        /// Kicks off (or resumes) filling in every achievement's global rarity, unless every
+        /// one loaded already has a value -- a redelivered schema does not need this asked
+        /// for again, since a reused instance keeps whatever rarity it already resolved.
+        /// </summary>
+        private void BeginPopulatingRarity()
+        {
+            if (this._AllAchievements.Any(a => a.RarityPercentage.HasValue == false) == false)
+            {
+                return;
+            }
+
+            this.PopulateRarityAsync().Forget();
+        }
+
+        /// <summary>
+        /// Asks Steam to compute global unlock percentages for this app, then polls for the
+        /// result rather than correlating its call result -- see the remarks on
+        /// <c>SteamUserStats013.RequestGlobalAchievementPercentages</c>. Steam typically
+        /// answers within a second or two; this gives up quietly after a bounded number of
+        /// attempts rather than polling forever, leaving <see cref="AchievementViewModel.RarityPercentage"/>
+        /// null for whatever never resolved.
+        /// </summary>
+        private async Task PopulateRarityAsync()
+        {
+            const int maximumAttempts = 10;
+            var interval = this._RarityPollInterval;
+
+            this._Steam.RequestGlobalAchievementPercentages();
+
+            try
+            {
+                for (var attempt = 0; attempt < maximumAttempts; attempt++)
+                {
+                    await Task.Delay(interval, this._ShutdownToken).ConfigureAwait(true);
+
+                    var stillMissing = false;
+                    var resolvedAny = false;
+                    foreach (var achievement in this._AllAchievements)
+                    {
+                        if (achievement.RarityPercentage.HasValue == true)
+                        {
+                            continue;
+                        }
+
+                        if (this._Steam.TryGetGlobalAchievementPercentage(achievement.Id, out var percentage) == true)
+                        {
+                            achievement.RarityPercentage = percentage;
+                            resolvedAny = true;
+                        }
+                        else
+                        {
+                            stillMissing = true;
+                        }
+                    }
+
+                    // The rarity sort and the ultra-rare filter both depend on values that
+                    // just changed out from under whatever view was already showing.
+                    if (resolvedAny == true &&
+                        (this._SortOrder == AchievementSortOrder.Rarity || this._Filter == AchievementFilter.UltraRare))
+                    {
+                        this.ApplyFilter();
+                    }
+
+                    if (stillMissing == false)
+                    {
+                        return;
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
         }
 
         private void ApplyFilter()
@@ -462,11 +673,13 @@ namespace SAM.Core.ViewModels
                 {
                     AchievementFilter.Locked => achievement.IsUnlocked == false,
                     AchievementFilter.Unlocked => achievement.IsUnlocked == true,
+                    AchievementFilter.Hidden => achievement.IsHidden == true,
+                    AchievementFilter.UltraRare => achievement.IsUltraRare == true,
                     _ => true,
                 };
                 return wanted == true && achievement.Matches(search) == true;
             });
-            this.Achievements.ReplaceAll(achievements);
+            this.Achievements.ReplaceAll(this.ApplySortOrder(achievements));
 
             var statistics = this._AllStatistics.Where(statistic => statistic.Matches(search) == true);
             this.Statistics.ReplaceAll(statistics);
@@ -477,6 +690,40 @@ namespace SAM.Core.ViewModels
             {
                 this.UpdateStatus();
             }
+        }
+
+        /// <summary>
+        /// Orders a filtered achievement sequence per <see cref="SortOrder"/>. Sorting only
+        /// ever reorders this presentation-side sequence; the pending state on each
+        /// achievement, and the master list it was drawn from, are untouched either way.
+        /// </summary>
+        private IEnumerable<AchievementViewModel> ApplySortOrder(IEnumerable<AchievementViewModel> achievements)
+        {
+            return this._SortOrder switch
+            {
+                AchievementSortOrder.Alphabetical => achievements
+                    .OrderBy(a => a.Name, StringComparer.CurrentCultureIgnoreCase),
+
+                // Locked first, so what is left to do surfaces above what is already done.
+                AchievementSortOrder.UnlockStatus => achievements
+                    .OrderBy(a => a.IsUnlocked == true)
+                    .ThenBy(a => a.Name, StringComparer.CurrentCultureIgnoreCase),
+
+                // Rarest (lowest percentage) first; an achievement rarity hasn't loaded for
+                // yet sorts after every achievement whose rarity is actually known.
+                AchievementSortOrder.Rarity => achievements
+                    .OrderBy(a => a.RarityPercentage.HasValue == false)
+                    .ThenBy(a => a.RarityPercentage ?? double.MaxValue)
+                    .ThenBy(a => a.Name, StringComparer.CurrentCultureIgnoreCase),
+
+                // Hidden achievements first, surfacing the secrets there are left to
+                // investigate (or reveal) above the ones with nothing to hide.
+                AchievementSortOrder.HiddenStatus => achievements
+                    .OrderBy(a => a.IsHidden == false)
+                    .ThenBy(a => a.Name, StringComparer.CurrentCultureIgnoreCase),
+
+                _ => achievements,
+            };
         }
 
         /// <summary>
@@ -602,6 +849,139 @@ namespace SAM.Core.ViewModels
         }
 
         /// <summary>
+        /// Stores every pending achievement one at a time instead of in a single batch, so a
+        /// large set of changes is never all-or-nothing: each achievement is fully committed
+        /// (set, then stored) before the next one starts, and the whole thing can be stopped
+        /// partway through without losing whatever already went through.
+        /// </summary>
+        /// <remarks>
+        /// Statistics are not part of this: they store as an ordinary batch alongside the
+        /// first achievement, since staging them one at a time has no comparable benefit.
+        /// </remarks>
+        private async Task RunQueuedStoreAsync()
+        {
+            if (this.HasValidationErrors == true)
+            {
+                this.ErrorRaised?.Invoke("Some statistics have invalid values. Fix them before storing.");
+                return;
+            }
+
+            var achievements = this._AllAchievements.Where(a => a.IsModified == true).ToList();
+            if (achievements.Count == 0)
+            {
+                return;
+            }
+
+            this._QueuedStoreCancellation = new CancellationTokenSource();
+            var token = this._QueuedStoreCancellation.Token;
+
+            this.IsBusy = true;
+            this.IsQueuedStoreRunning = true;
+            this.QueuedStoreTotal = achievements.Count;
+            this.QueuedStoreCompleted = 0;
+
+            var stored = 0;
+            try
+            {
+                var statistics = this._AllStatistics.Where(s => s.IsModified == true).ToList();
+
+                for (var i = 0; i < achievements.Count; i++)
+                {
+                    if (token.IsCancellationRequested == true)
+                    {
+                        break;
+                    }
+
+                    var achievement = achievements[i];
+                    this.Status = _($"Storing {i + 1} of {achievements.Count}: {achievement.Name}...");
+
+                    if (this._Steam.SetAchievement(achievement.Id, achievement.IsUnlocked) == false)
+                    {
+                        this.ErrorRaised?.Invoke(
+                            _($"An error occurred while setting the state for {achievement.Id}, stopping the queue."));
+                        break;
+                    }
+
+                    // The first item also carries any pending statistics, so they are not
+                    // silently dropped by a queue that only ever iterates achievements.
+                    var statisticsFailed = false;
+                    if (i == 0)
+                    {
+                        foreach (var statistic in statistics)
+                        {
+                            if (statistic.Store(this._Steam) == true)
+                            {
+                                continue;
+                            }
+
+                            this.ErrorRaised?.Invoke(
+                                _($"An error occurred while setting the value for {statistic.Id}, stopping the queue."));
+                            statisticsFailed = true;
+                            break;
+                        }
+                    }
+
+                    if (statisticsFailed == true)
+                    {
+                        break;
+                    }
+
+                    if (this._Steam.StoreStats() == false)
+                    {
+                        this.ErrorRaised?.Invoke("An error occurred while storing, stopping the queue.");
+                        break;
+                    }
+
+                    var now = DateTime.Now;
+                    achievement.AcceptPending(achievement.IsUnlocked == true ? now : null);
+                    if (i == 0)
+                    {
+                        foreach (var statistic in statistics)
+                        {
+                            statistic.AcceptPending();
+                        }
+                    }
+
+                    stored = i + 1;
+                    this.QueuedStoreCompleted = stored;
+                    this.RaiseTotals();
+
+                    if (i < achievements.Count - 1)
+                    {
+                        var remaining = achievements.Count - stored;
+                        this.Status = _($"Stored {stored} of {achievements.Count}. {remaining} more queued...");
+
+                        try
+                        {
+                            await Task.Delay(this._QueuedStoreDelay, token).ConfigureAwait(true);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                this.InfoRaised?.Invoke(stored == achievements.Count
+                    ? _($"Stored {stored} of {achievements.Count} achievements.")
+                    : _($"Queued store stopped after {stored} of {achievements.Count} achievements."));
+            }
+            finally
+            {
+                this.IsBusy = false;
+                this.IsQueuedStoreRunning = false;
+                this._QueuedStoreCancellation?.Dispose();
+                this._QueuedStoreCancellation = null;
+                this.UpdateStatus();
+            }
+        }
+
+        private void CancelQueuedStore()
+        {
+            this._QueuedStoreCancellation?.Cancel();
+        }
+
+        /// <summary>
         /// Reproduces the three-step confirmation the tool has always asked for before a reset.
         /// Resetting stats is not reversible.
         /// </summary>
@@ -662,6 +1042,7 @@ namespace SAM.Core.ViewModels
                 nameof(this.IsModified),
                 nameof(this.HasValidationErrors));
             this.StoreCommand.RaiseCanExecuteChanged();
+            this.QueuedStoreCommand.RaiseCanExecuteChanged();
         }
 
         private void OnProtectedChangeRejected(AchievementViewModel achievement)
@@ -695,6 +1076,7 @@ namespace SAM.Core.ViewModels
                 nameof(this.IsModified),
                 nameof(this.HasValidationErrors));
             this.StoreCommand.RaiseCanExecuteChanged();
+            this.QueuedStoreCommand.RaiseCanExecuteChanged();
         }
 
         private void RaiseCommandStates()
@@ -705,6 +1087,7 @@ namespace SAM.Core.ViewModels
             this.LockAllCommand.RaiseCanExecuteChanged();
             this.InvertAllCommand.RaiseCanExecuteChanged();
             this.ResetAllCommand.RaiseCanExecuteChanged();
+            this.QueuedStoreCommand.RaiseCanExecuteChanged();
         }
 
         private static string TranslateError(int id) => id switch

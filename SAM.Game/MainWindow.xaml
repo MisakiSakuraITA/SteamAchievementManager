@@ -28,7 +28,9 @@
                     BorderBrush="{StaticResource Brush.Border.Subtle}"
                     BorderThickness="1"
                     CornerRadius="6"
-                    Padding="10">
+                    Padding="10"
+                    MouseEnter="OnAchievementCardMouseEnter"
+                    MouseLeave="OnAchievementCardMouseLeave">
                 <Border.Style>
                     <Style TargetType="{x:Type Border}">
                         <Style.Triggers>
@@ -78,12 +80,12 @@
                     <StackPanel Grid.Column="1" Margin="12,0,10,0">
                         <TextBlock Style="{StaticResource Text.Body}"
                                    FontWeight="SemiBold"
-                                   Text="{Binding Name}"
+                                   Text="{Binding DisplayName}"
                                    TextTrimming="CharacterEllipsis"
                                    ToolTip="{Binding Id}" />
                         <TextBlock Style="{StaticResource Text.Caption}"
                                    Margin="0,3,0,0"
-                                   Text="{Binding Description}"
+                                   Text="{Binding DisplayDescription}"
                                    TextWrapping="Wrap"
                                    MaxHeight="30"
                                    TextTrimming="CharacterEllipsis" />
@@ -117,6 +119,35 @@
                                     Padding="5,1"
                                     Visibility="{Binding IsHidden, Converter={StaticResource BoolToVisible}}">
                                 <TextBlock Style="{StaticResource Text.Label}" Text="HIDDEN" />
+                            </Border>
+
+                            <!-- rarity -->
+                            <Border CornerRadius="3"
+                                    Margin="5,0,0,0"
+                                    Padding="5,1"
+                                    Visibility="{Binding RarityText, Converter={StaticResource HasValue}}"
+                                    ToolTip="Percentage of owners who have unlocked this achievement, per Steam's global stats">
+                                <Border.Style>
+                                    <Style TargetType="{x:Type Border}">
+                                        <Setter Property="Background" Value="{StaticResource Brush.Bg.Overlay}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsUltraRare}" Value="True">
+                                                <Setter Property="Background" Value="{StaticResource Brush.Rarity.Dim}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Text="{Binding RarityText}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Text.Label}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsUltraRare}" Value="True">
+                                                    <Setter Property="Foreground" Value="{StaticResource Brush.Rarity}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                             </Border>
                         </StackPanel>
                     </StackPanel>
@@ -312,6 +343,7 @@
                             BorderBrush="{StaticResource Brush.Border.Subtle}"
                             BorderThickness="0,0,0,1"
                             Padding="14,10">
+                        <StackPanel>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" MaxWidth="320" />
@@ -350,6 +382,13 @@
                                 <ToggleButton Style="{StaticResource Toggle.Segment}"
                                               Content="Unlocked"
                                               IsChecked="{Binding Filter, Converter={StaticResource EnumToBool}, ConverterParameter=Unlocked}" />
+                                <ToggleButton Style="{StaticResource Toggle.Segment}"
+                                              Content="Hidden"
+                                              IsChecked="{Binding Filter, Converter={StaticResource EnumToBool}, ConverterParameter=Hidden}" />
+                                <ToggleButton Style="{StaticResource Toggle.Segment}"
+                                              Content="Ultra-Rare"
+                                              ToolTip="Achievements under 5% global unlock rate"
+                                              IsChecked="{Binding Filter, Converter={StaticResource EnumToBool}, ConverterParameter=UltraRare}" />
                             </StackPanel>
 
                             <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
@@ -373,6 +412,52 @@
                                 </Button>
                             </StackPanel>
                         </Grid>
+
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Path Style="{StaticResource Icon.Stroked}"
+                                      Margin="0,0,8,0"
+                                      VerticalAlignment="Center"
+                                      Data="{StaticResource Icon.Sort}"
+                                      Stroke="{StaticResource Brush.Text.Muted}" />
+                                <ToggleButton Style="{StaticResource Toggle.Segment}"
+                                              Content="Default"
+                                              ToolTip="The order the game itself declares them in"
+                                              IsChecked="{Binding SortOrder, Converter={StaticResource EnumToBool}, ConverterParameter=Default}" />
+                                <ToggleButton Style="{StaticResource Toggle.Segment}"
+                                              Content="A-Z"
+                                              IsChecked="{Binding SortOrder, Converter={StaticResource EnumToBool}, ConverterParameter=Alphabetical}" />
+                                <ToggleButton Style="{StaticResource Toggle.Segment}"
+                                              Content="Status"
+                                              ToolTip="Locked achievements first"
+                                              IsChecked="{Binding SortOrder, Converter={StaticResource EnumToBool}, ConverterParameter=UnlockStatus}" />
+                                <ToggleButton Style="{StaticResource Toggle.Segment}"
+                                              Content="Rarity"
+                                              ToolTip="Rarest first"
+                                              IsChecked="{Binding SortOrder, Converter={StaticResource EnumToBool}, ConverterParameter=Rarity}" />
+                                <ToggleButton Style="{StaticResource Toggle.Segment}"
+                                              Content="Hidden"
+                                              ToolTip="Hidden achievements first"
+                                              IsChecked="{Binding SortOrder, Converter={StaticResource EnumToBool}, ConverterParameter=HiddenStatus}" />
+                            </StackPanel>
+
+                            <ToggleButton Grid.Column="2"
+                                          Style="{StaticResource Toggle.Segment}"
+                                          IsChecked="{Binding RevealHiddenAchievements}"
+                                          ToolTip="Show every hidden achievement's real name, description and icon">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource Icon.Stroked}" Width="13" Height="13" Data="{StaticResource Icon.Unlock}" />
+                                    <AccessText Margin="6,0,0,0" Text="Reveal _Hidden Achievements" />
+                                </StackPanel>
+                            </ToggleButton>
+                        </Grid>
+                        </StackPanel>
                     </Border>
 
                     <ListBox Grid.Row="1"
@@ -460,9 +545,21 @@
                              Width="80" Height="4"
                              Margin="0,0,10,0"
                              VerticalAlignment="Center"
-                             IsIndeterminate="True"
-                             Style="{StaticResource Progress.Completion}"
-                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisible}}" />
+                             Value="{Binding QueuedStoreProgressPercentage, Mode=OneWay}"
+                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisible}}">
+                    <ProgressBar.Style>
+                        <Style TargetType="{x:Type ProgressBar}" BasedOn="{StaticResource Progress.Completion}">
+                            <Setter Property="IsIndeterminate" Value="True" />
+                            <Style.Triggers>
+                                <!-- A queued store's own progress is known step by step, so it
+                                     is shown for real rather than as an indeterminate spinner. -->
+                                <DataTrigger Binding="{Binding IsQueuedStoreRunning}" Value="True">
+                                    <Setter Property="IsIndeterminate" Value="False" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ProgressBar.Style>
+                </ProgressBar>
 
                 <TextBlock Grid.Column="1"
                            Style="{StaticResource Text.Secondary}"
@@ -486,11 +583,22 @@
                                Text="{Binding ModifiedCount, StringFormat={}{0} pending}" />
                 </StackPanel>
 
-                <StackPanel Grid.Column="3" Orientation="Horizontal">
+                <StackPanel Grid.Column="3"
+                            Orientation="Horizontal"
+                            Visibility="{Binding IsQueuedStoreRunning, Converter={StaticResource BoolToCollapsed}}">
                     <Button Style="{StaticResource Button.Ghost}" Command="{Binding ReloadCommand}">
                         <StackPanel Orientation="Horizontal">
                             <Path Style="{StaticResource Icon.Stroked}" Data="{StaticResource Icon.Refresh}" />
                             <AccessText Margin="7,0,0,0" Text="_Reload" />
+                        </StackPanel>
+                    </Button>
+                    <Button Margin="8,0,0,0"
+                            Style="{StaticResource Button.Ghost}"
+                            Command="{Binding QueuedStoreCommand}"
+                            ToolTip="Store pending achievements one at a time, so a large batch can be watched or stopped partway through">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Style="{StaticResource Icon.Stroked}" Data="{StaticResource Icon.Save}" />
+                            <AccessText Margin="7,0,0,0" Text="Store _Gradually" />
                         </StackPanel>
                     </Button>
                     <Button Margin="8,0,0,0"
@@ -502,6 +610,19 @@
                                   Stroke="{StaticResource Brush.Text.OnAccent}" />
                             <AccessText Margin="7,0,0,0" Text="_Store changes" />
                         </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <StackPanel Grid.Column="3"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            Visibility="{Binding IsQueuedStoreRunning, Converter={StaticResource BoolToVisible}}">
+                    <TextBlock Style="{StaticResource Text.Caption}"
+                               Margin="0,0,10,0"
+                               VerticalAlignment="Center"
+                               Text="{Binding QueuedStoreCompleted, StringFormat={}{0} stored}" />
+                    <Button Style="{StaticResource Button.Danger}" Command="{Binding CancelQueuedStoreCommand}">
+                        <AccessText Text="_Cancel" />
                     </Button>
                 </StackPanel>
             </Grid>

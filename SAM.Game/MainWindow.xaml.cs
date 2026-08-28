@@ -165,6 +165,27 @@ namespace SAM.Game
             this._Notification.IsOpen = true;
         }
 
+        /// <summary>Peeks at a hidden achievement's real details while the pointer is over its card.</summary>
+        private void OnAchievementCardMouseEnter(object sender, MouseEventArgs e)
+        {
+            if (sender is FrameworkElement { DataContext: AchievementViewModel achievement })
+            {
+                achievement.ShowSecretDetails = true;
+            }
+        }
+
+        /// <summary>
+        /// Reverts to whatever the global reveal toggle currently says, rather than always
+        /// hiding again -- leaving hover only in charge when the toggle itself is off.
+        /// </summary>
+        private void OnAchievementCardMouseLeave(object sender, MouseEventArgs e)
+        {
+            if (sender is FrameworkElement { DataContext: AchievementViewModel achievement })
+            {
+                achievement.ShowSecretDetails = this._Manager.RevealHiddenAchievements;
+            }
+        }
+
         /// <summary>
         /// Window-wide shortcuts. Handled on the tunnelling Preview pass so they work no
         /// matter which control currently has focus, rather than only when the element that
