@@ -24,7 +24,6 @@ using System;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
-using SAM.Core.Protocol;
 using SAM.Core.Steam;
 using SAM.Core.Threading;
 using SAM.Core.ViewModels;
@@ -47,8 +46,7 @@ namespace SAM.Picker
 
         public MainWindow(ISteamLibraryService steam)
             : this(new GameLibraryViewModel(
-                steam ?? throw new ArgumentNullException(nameof(steam)),
-                new ProtocolHandlerService(Environment.ProcessPath ?? "SAM.Picker.exe")))
+                steam ?? throw new ArgumentNullException(nameof(steam))))
         {
         }
 
@@ -64,7 +62,6 @@ namespace SAM.Picker
             this._Library = library;
             this._Library.LaunchRequested += this.OnLaunchRequested;
             this._Library.ErrorRaised += this.OnErrorRaised;
-            this._Library.InfoRaised += this.OnInfoRaised;
 
             this.InitializeComponent();
 
@@ -103,7 +100,6 @@ namespace SAM.Picker
 
             this._Library.LaunchRequested -= this.OnLaunchRequested;
             this._Library.ErrorRaised -= this.OnErrorRaised;
-            this._Library.InfoRaised -= this.OnInfoRaised;
             this._Library.Shutdown();
 
             this.Capsules.Dispose();
@@ -140,30 +136,12 @@ namespace SAM.Picker
             this.ShowNotification(message, NotificationSeverity.Error, this._Library.RefreshCommand);
         }
 
-        private void OnInfoRaised(string message)
-        {
-            this.ShowNotification(message, NotificationSeverity.Success, null);
-        }
-
         private void ShowNotification(string message, NotificationSeverity severity, ICommand retry)
         {
             this._Notification.Message = message;
             this._Notification.Severity = severity;
             this._Notification.RetryCommand = retry;
             this._Notification.IsOpen = true;
-        }
-
-        /// <summary>
-        /// A plain click does not open a ContextMenu on its own -- that only happens for a
-        /// right-click or the Apps key -- so the button that stands in for a "Tools" dropdown
-        /// opens its own menu explicitly here.
-        /// </summary>
-        private void OnToolsButtonClick(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement { ContextMenu: not null } element)
-            {
-                element.ContextMenu.IsOpen = true;
-            }
         }
 
         private void OnGameActivated(object sender, MouseButtonEventArgs e)

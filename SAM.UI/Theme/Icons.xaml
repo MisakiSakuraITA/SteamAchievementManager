@@ -45,6 +45,8 @@
     <Geometry x:Key="Icon.Check">M 4,12.5 L 9.5,18 L 20,6</Geometry>
     <Geometry x:Key="Icon.User">M 8,8 A 4,4 0 1 0 16,8 A 4,4 0 1 0 8,8 M 4,20 A 8,8 0 0 1 20,20</Geometry>
     <Geometry x:Key="Icon.Tools">M 4,6 L 20,6 M 4,12 L 20,12 M 4,18 L 20,18</Geometry>
+    <Geometry x:Key="Icon.Export">M 12,4 L 12,15 M 7,10 L 12,15 L 17,10 M 5,19 L 19,19</Geometry>
+    <Geometry x:Key="Icon.Import">M 12,20 L 12,9 M 7,14 L 12,9 L 17,14 M 5,5 L 19,5</Geometry>
 
     <Style x:Key="Icon.Stroked" TargetType="{x:Type Path}">
         <Setter Property="Stretch" Value="Uniform" />

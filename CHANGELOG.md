@@ -7,6 +7,20 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [7.2.2] - 2026-08-29
+
+### Changed
+
+- **Redesigned "More Actions" Menu**: Transformed the utility dropdown into a sleek, modern
+  popup panel with dark-theme styling, rounded corners, hover feedback, and clear visual
+  hierarchy.
+
+### Removed
+
+- **URI Protocol Handler (`sam://`)**: Completely removed the registry-backed URI scheme,
+  fast-path CLI arguments, and related UI toggles to simplify the user experience and reduce
+  codebase surface area.
+
 ## [7.2.1] - 2026-08-29
 
 ### Added
@@ -134,7 +148,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Automatic Steam pipe disconnection detection that gates destructive commands once the
   connection is lost.
 
-[Unreleased]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.2.1...HEAD
+[Unreleased]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.2.2...HEAD
+[7.2.2]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.2.1...v7.2.2
 [7.2.1]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.2.0...v7.2.1
 [7.2.0]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.1.2...v7.2.0
 [7.1.2]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.1.1...v7.1.2

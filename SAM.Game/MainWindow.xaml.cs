@@ -167,10 +167,10 @@ namespace SAM.Game
 
         /// <summary>
         /// A plain click does not open a ContextMenu on its own -- that only happens for a
-        /// right-click or the Apps key -- so the button that stands in for a "Tools" dropdown
-        /// opens its own menu explicitly here.
+        /// right-click or the Apps key -- so the button that stands in for the "More actions"
+        /// dropdown opens its own menu explicitly here.
         /// </summary>
-        private void OnToolsButtonClick(object sender, RoutedEventArgs e)
+        private void OnMoreActionsButtonClick(object sender, RoutedEventArgs e)
         {
             if (sender is FrameworkElement { ContextMenu: not null } element)
             {

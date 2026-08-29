@@ -830,23 +830,39 @@
         </Setter>
     </Style>
 
-    <!-- ============================ tools menu ============================ -->
+    <!-- ============================ more actions menu ============================ -->
 
-    <!-- A dropdown for secondary, infrequent actions: kept out of the primary toolbar so it
-         does not compete with what the user reaches for on every visit. -->
+    <!-- A popup for secondary, infrequent actions: kept out of the primary toolbar so it does
+         not compete with what the user reaches for on every visit. Floats above the window
+         with a soft shadow, rather than reading as a flat extension of it. -->
+    <DropShadowEffect x:Key="Effect.Popup" Color="#FF000000" Opacity="0.5" BlurRadius="24" ShadowDepth="8" Direction="270" />
+
+    <!-- Shared by every menu item's own icon, so each gets the same quiet, rounded backdrop
+         regardless of which glyph it carries. -->
+    <Style x:Key="Icon.MenuChip" TargetType="{x:Type Border}">
+        <Setter Property="Width" Value="32" />
+        <Setter Property="Height" Value="32" />
+        <Setter Property="CornerRadius" Value="{StaticResource Radius.Medium}" />
+        <Setter Property="Background" Value="{StaticResource Brush.Bg.Input}" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
     <Style TargetType="{x:Type ContextMenu}">
         <Setter Property="Background" Value="{StaticResource Brush.Bg.Elevated}" />
         <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.Strong}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Padding" Value="4" />
+        <Setter Property="Padding" Value="6" />
+        <Setter Property="MinWidth" Value="248" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type ContextMenu}">
                     <Border Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="{StaticResource Radius.Medium}"
+                            CornerRadius="6"
                             Padding="{TemplateBinding Padding}"
+                            Effect="{StaticResource Effect.Popup}"
                             SnapsToDevicePixels="True">
                         <StackPanel IsItemsHost="True" />
                     </Border>
@@ -860,63 +876,30 @@
         <Setter Property="FontSize" Value="{StaticResource Size.Text.Body}" />
         <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
         <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Margin" Value="0,1" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type MenuItem}">
                     <Border x:Name="Root"
                             Background="Transparent"
-                            CornerRadius="{StaticResource Radius.Small}"
-                            Padding="8,7"
+                            CornerRadius="{StaticResource Radius.Medium}"
+                            Padding="8,8"
                             SnapsToDevicePixels="True">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="20" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <!-- Reserved whether or not this item is checkable, so a checkable
-                                 item's header lines up with every plain action beside it
-                                 instead of shifting the moment it is checked. -->
-                            <Path x:Name="Check"
-                                  Grid.Column="0"
-                                  Width="10" Height="10"
-                                  Stretch="Uniform"
-                                  Data="{StaticResource Icon.Check}"
-                                  Stroke="{StaticResource Brush.Accent}"
-                                  StrokeThickness="2"
-                                  StrokeStartLineCap="Round"
-                                  StrokeEndLineCap="Round"
-                                  StrokeLineJoin="Round"
-                                  Visibility="Collapsed" />
-                            <ContentPresenter Grid.Column="1"
-                                              ContentSource="Header"
-                                              VerticalAlignment="Center"
-                                              RecognizesAccessKey="True"
-                                              TextElement.Foreground="{TemplateBinding Foreground}" />
-                        </Grid>
+                        <ContentPresenter ContentSource="Header"
+                                          VerticalAlignment="Center"
+                                          RecognizesAccessKey="True"
+                                          TextElement.Foreground="{TemplateBinding Foreground}" />
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsHighlighted" Value="True">
                             <Setter TargetName="Root" Property="Background" Value="{StaticResource Brush.Bg.Overlay}" />
-                        </Trigger>
-                        <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="Check" Property="Visibility" Value="Visible" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.4" />
                             <Setter Property="Cursor" Value="Arrow" />
                         </Trigger>
                     </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
-
-    <Style TargetType="{x:Type Separator}">
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="{x:Type Separator}">
-                    <Border Height="1" Margin="6,4" Background="{StaticResource Brush.Border.Subtle}" />
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

@@ -27,11 +27,7 @@ using System.Globalization;
 
 namespace SAM.Picker
 {
-    /// <summary>
-    /// Starts SAM.Game.exe for a given app id. Shared by the ordinary "manage achievements"
-    /// action and by a <c>sam://</c> protocol launch, so both go through exactly one place
-    /// that knows how SAM.Game.exe is actually started.
-    /// </summary>
+    /// <summary>Starts SAM.Game.exe for a given app id, for the "manage achievements" action.</summary>
     internal static class GameProcessLauncher
     {
         public static bool TryLaunch(uint appId, out Exception failure)

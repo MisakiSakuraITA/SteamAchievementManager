@@ -24,7 +24,6 @@ using System;
 using System.IO;
 using System.Windows;
 using SAM.Core.Net;
-using SAM.Core.Protocol;
 using SAM.Core.Steam;
 
 namespace SAM.Picker
@@ -39,22 +38,6 @@ namespace SAM.Picker
             base.OnStartup(e);
 
             SAM.UI.CrashGuard.Install(this, "Steam Achievement Manager");
-
-            // A sam:// launch needs nothing from this process but the ability to start
-            // SAM.Game.exe -- that process makes its own, independent Steam connection, so
-            // there is no reason for the picker to open (and immediately discard) one of its
-            // own first.
-            if (e.Args.Length > 0 && ProtocolUri.TryParseAppId(e.Args[0], out var protocolAppId) == true)
-            {
-                if (GameProcessLauncher.TryLaunch(protocolAppId, out var failure) == false)
-                {
-                    Fail("Failed to start SAM.Game.exe." + (failure == null ? "" : "\n\n(" + failure.Message + ")"));
-                    return;
-                }
-
-                this.Shutdown();
-                return;
-            }
 
             if (IsRunningFromSteamDirectory() == true)
             {

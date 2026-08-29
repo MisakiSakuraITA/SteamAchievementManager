@@ -154,30 +154,11 @@
                            VerticalAlignment="Center"
                            Text="Steam Achievement Manager" />
 
-                <!-- account + tools -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <controls:ActiveAccountBadge DisplayName="{Binding ActiveAccountDisplayName}"
-                                                  SteamIdText="{Binding ActiveSteamIdText}" />
-                    <Button x:Name="_ToolsButton"
-                            Margin="8,0,0,0"
-                            Style="{StaticResource Button.Ghost}"
-                            Click="OnToolsButtonClick"
-                            ToolTip="More actions"
-                            AutomationProperties.Name="Tools">
-                        <Path Style="{StaticResource Icon.Stroked}" Data="{StaticResource Icon.Tools}" />
-                        <Button.ContextMenu>
-                            <ContextMenu Placement="Bottom"
-                                         PlacementTarget="{Binding ElementName=_ToolsButton}"
-                                         DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
-                                <MenuItem Header="Register sam:// Protocol"
-                                          IsCheckable="True"
-                                          IsChecked="{Binding IsProtocolRegistered, Mode=OneWay}"
-                                          Command="{Binding ToggleProtocolRegistrationCommand}"
-                                          ToolTip="Let links like sam://game/440 (from Playnite, LaunchBox, or the Run dialog) launch SAM directly" />
-                            </ContextMenu>
-                        </Button.ContextMenu>
-                    </Button>
-                </StackPanel>
+                <!-- account -->
+                <controls:ActiveAccountBadge Grid.Column="1"
+                                              VerticalAlignment="Center"
+                                              DisplayName="{Binding ActiveAccountDisplayName}"
+                                              SteamIdText="{Binding ActiveSteamIdText}" />
             </Grid>
         </Border>
 

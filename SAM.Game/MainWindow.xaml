@@ -310,27 +310,55 @@
                     </StackPanel>
                 </StackPanel>
 
-                <!-- account + tools -->
+                <!-- account + more actions -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0">
                     <controls:ActiveAccountBadge DisplayName="{Binding ActiveAccountDisplayName}"
                                                   SteamIdText="{Binding ActiveSteamIdText}" />
-                    <Button x:Name="_ToolsButton"
+                    <Button x:Name="_MoreActionsButton"
                             Margin="8,0,0,0"
                             Style="{StaticResource Button.Ghost}"
-                            Click="OnToolsButtonClick"
+                            Click="OnMoreActionsButtonClick"
                             ToolTip="More actions"
-                            AutomationProperties.Name="Tools">
+                            AutomationProperties.Name="More actions">
                         <Path Style="{StaticResource Icon.Stroked}" Data="{StaticResource Icon.Tools}" />
                         <Button.ContextMenu>
                             <ContextMenu Placement="Bottom"
-                                         PlacementTarget="{Binding ElementName=_ToolsButton}"
+                                         PlacementTarget="{Binding ElementName=_MoreActionsButton}"
                                          DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
-                                <MenuItem Header="E_xport Snapshot..."
-                                          Command="{Binding ExportSnapshotCommand}"
-                                          ToolTip="Save the currently shown achievement and statistic state to a JSON or CSV file" />
-                                <MenuItem Header="_Import Snapshot..."
-                                          Command="{Binding ImportSnapshotCommand}"
-                                          ToolTip="Load a snapshot file and stage its values for review before storing" />
+                                <MenuItem Command="{Binding ExportSnapshotCommand}"
+                                          ToolTip="Save the currently shown achievement and statistic state to a JSON or CSV file">
+                                    <MenuItem.Header>
+                                        <StackPanel Orientation="Horizontal">
+                                            <Border Style="{StaticResource Icon.MenuChip}">
+                                                <Path Style="{StaticResource Icon.Stroked}"
+                                                      Width="14" Height="14"
+                                                      Data="{StaticResource Icon.Export}"
+                                                      Stroke="{StaticResource Brush.Accent}" />
+                                            </Border>
+                                            <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                                                <AccessText Text="E_xport Snapshot" FontWeight="SemiBold" />
+                                                <TextBlock Style="{StaticResource Text.Caption}" Text="Save progress to a JSON or CSV file" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </MenuItem.Header>
+                                </MenuItem>
+                                <MenuItem Command="{Binding ImportSnapshotCommand}"
+                                          ToolTip="Load a snapshot file and stage its values for review before storing">
+                                    <MenuItem.Header>
+                                        <StackPanel Orientation="Horizontal">
+                                            <Border Style="{StaticResource Icon.MenuChip}">
+                                                <Path Style="{StaticResource Icon.Stroked}"
+                                                      Width="14" Height="14"
+                                                      Data="{StaticResource Icon.Import}"
+                                                      Stroke="{StaticResource Brush.Accent}" />
+                                            </Border>
+                                            <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                                                <AccessText Text="_Import Snapshot" FontWeight="SemiBold" />
+                                                <TextBlock Style="{StaticResource Text.Caption}" Text="Restore progress from a file for review" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </MenuItem.Header>
+                                </MenuItem>
                             </ContextMenu>
                         </Button.ContextMenu>
                     </Button>
