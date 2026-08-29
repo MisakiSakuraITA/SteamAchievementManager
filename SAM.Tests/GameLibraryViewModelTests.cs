@@ -276,13 +276,28 @@ namespace SAM.Tests
         [Fact]
         public void ActiveAccountPropertiesAreReadThroughFromTheSteamService()
         {
-            FakeLibrary steam = new() { ActiveSteamId = 76561197960287930UL, ActivePersonaName = "Alice" };
+            FakeLibrary steam = new()
+            {
+                ActiveSteamId = 76561197960287930UL,
+                ActivePersonaName = "Alice",
+                ActiveAvatarFilePath = @"C:\Steam\config\avatars\abc123hash_full.jpg",
+            };
             var library = Build(steam, Enumerable.Empty<GameListEntry>());
 
             Assert.Equal(76561197960287930UL, library.ActiveSteamId);
             Assert.Equal("76561197960287930", library.ActiveSteamIdText);
             Assert.Equal("Alice", library.ActivePersonaName);
             Assert.Equal("Alice", library.ActiveAccountDisplayName);
+            Assert.Equal(@"C:\Steam\config\avatars\abc123hash_full.jpg", library.ActiveAvatarFilePath);
+        }
+
+        [Fact]
+        public void ActiveAvatarFilePathIsNullWhenNoAvatarWasFound()
+        {
+            FakeLibrary steam = new() { ActiveAvatarFilePath = null };
+            var library = Build(steam, Enumerable.Empty<GameListEntry>());
+
+            Assert.Null(library.ActiveAvatarFilePath);
         }
 
         [Fact]

@@ -7,6 +7,24 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [7.2.3] - 2026-08-29
+
+### Added
+
+- **Real Steam Profile Avatar**: The header account badge now shows the signed-in account's
+  actual Steam avatar, read from the local avatar cache, inside a circular frame with a
+  subtle outline. Falls back to the plain user glyph when no cached avatar is found.
+
+### Fixed
+
+- **Search Box Focus Ring**: Removed the default rectangular keyboard-focus outline that
+  WPF drew on top of every custom-templated control's own rounded border, which is what
+  produced the square-cornered "clipping" artifact around a focused search box (and,
+  systemically, every other focusable control in the theme).
+- **Input Control Polish**: Standardized corner rounding across buttons, text boxes, and
+  dropdowns, and aligned the search box's placeholder text with where typed text actually
+  starts, removing a one-pixel jump between the two.
+
 ## [7.2.2] - 2026-08-29
 
 ### Changed
@@ -148,7 +166,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Automatic Steam pipe disconnection detection that gates destructive commands once the
   connection is lost.
 
-[Unreleased]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.2.2...HEAD
+[Unreleased]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.2.3...HEAD
+[7.2.3]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.2.2...v7.2.3
 [7.2.2]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.2.1...v7.2.2
 [7.2.1]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.2.0...v7.2.1
 [7.2.0]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.1.2...v7.2.0

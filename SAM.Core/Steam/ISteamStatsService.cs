@@ -101,5 +101,11 @@ namespace SAM.Core.Steam
         /// obtained and why.
         /// </summary>
         string ActivePersonaName { get; }
+
+        /// <summary>
+        /// Path to the currently signed-in account's locally-cached avatar image, or
+        /// <see langword="null"/> when none was found.
+        /// </summary>
+        string ActiveAvatarFilePath { get; }
     }
 }

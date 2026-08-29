@@ -88,6 +88,9 @@
         <Setter Property="MinHeight" Value="30" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
+        <!-- The rounded border already grows an accent outline on focus below; the system's
+             own rectangular focus adorner would otherwise draw its square corners over it. -->
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="Template">
@@ -204,6 +207,7 @@
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type CheckBox}">
@@ -271,6 +275,10 @@
         <Setter Property="SelectionBrush" Value="{StaticResource Brush.Accent}" />
         <Setter Property="SelectionOpacity" Value="0.35" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
+        <!-- Without this, WPF's own rectangular focus adorner draws on top of the rounded
+             accent border this template already grows on focus below: the mismatched
+             square corners over a rounded border is what reads as a clipped/cut-off edge. -->
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
         <Setter Property="Template">
             <Setter.Value>
@@ -383,6 +391,7 @@
         <Setter Property="Padding" Value="10,5,26,5" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type ComboBox}">
@@ -562,6 +571,7 @@
         <Setter Property="Foreground" Value="{StaticResource Brush.Text.Muted}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type TabItem}">
@@ -642,6 +652,7 @@
         <Setter Property="Padding" Value="0" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="Focusable" Value="True" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type ListBoxItem}">
@@ -806,14 +817,26 @@
                             SnapsToDevicePixels="True"
                             ToolTip="{Binding DisplayName, RelativeSource={RelativeSource TemplatedParent}}">
                         <StackPanel Orientation="Horizontal">
-                            <Border Width="21" Height="21"
-                                    Background="{StaticResource Brush.Bg.Input}"
-                                    CornerRadius="11">
-                                <Path Style="{StaticResource Icon.Stroked}"
-                                      Width="11" Height="11"
-                                      Data="{StaticResource Icon.User}"
-                                      Stroke="{StaticResource Brush.Text.Muted}" />
-                            </Border>
+                            <!-- Real circle geometry, not a CornerRadius approximation, so the
+                                 1px outline and the avatar clip both land exactly on it. -->
+                            <Grid Width="21" Height="21">
+                                <Ellipse Fill="{StaticResource Brush.Bg.Input}"
+                                         Stroke="{StaticResource Brush.Border.Subtle}"
+                                         StrokeThickness="1" />
+                                <Grid Width="19" Height="19">
+                                    <Grid.Clip>
+                                        <EllipseGeometry Center="9.5,9.5" RadiusX="9.5" RadiusY="9.5" />
+                                    </Grid.Clip>
+                                    <!-- Shows through on its own whenever there is no avatar
+                                         image on top of it: no Visibility wiring needed. -->
+                                    <Path Style="{StaticResource Icon.Stroked}"
+                                          Width="11" Height="11"
+                                          Data="{StaticResource Icon.User}"
+                                          Stroke="{StaticResource Brush.Text.Muted}" />
+                                    <Image Source="{Binding AvatarImageSource, RelativeSource={RelativeSource TemplatedParent}}"
+                                           Stretch="UniformToFill" />
+                                </Grid>
+                            </Grid>
                             <StackPanel Margin="8,0,2,0" VerticalAlignment="Center">
                                 <TextBlock Style="{StaticResource Text.Label}"
                                            Text="{TemplateBinding DisplayName}"
@@ -860,7 +883,7 @@
                     <Border Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="6"
+                            CornerRadius="{StaticResource Radius.Medium}"
                             Padding="{TemplateBinding Padding}"
                             Effect="{StaticResource Effect.Popup}"
                             SnapsToDevicePixels="True">
@@ -878,6 +901,7 @@
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Margin" Value="0,1" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type MenuItem}">

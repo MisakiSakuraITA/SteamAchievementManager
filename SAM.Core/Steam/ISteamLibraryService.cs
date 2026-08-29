@@ -70,6 +70,12 @@ namespace SAM.Core.Steam
         string ActivePersonaName { get; }
 
         /// <summary>
+        /// Path to the currently signed-in account's locally-cached avatar image, or
+        /// <see langword="null"/> when none was found.
+        /// </summary>
+        string ActiveAvatarFilePath { get; }
+
+        /// <summary>
         /// Raised with the app id whose metadata Steam has just filled in. Artwork and names
         /// often arrive this way well after the library has been listed.
         /// </summary>

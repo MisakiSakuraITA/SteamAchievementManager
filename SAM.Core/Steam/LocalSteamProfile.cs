@@ -75,5 +75,54 @@ namespace SAM.Core.Steam
                 return null;
             }
         }
+
+        /// <summary>
+        /// Resolves the locally-cached avatar image for <paramref name="steamId64"/>: the
+        /// hash Steam recorded for it in <c>loginusers.vdf</c>, then whichever of the file
+        /// names Steam's own avatar cache has used over the years actually exists on disk.
+        /// Best-effort, exactly like <see cref="GetPersonaName"/>: returns
+        /// <see langword="null"/> rather than throwing, and rather than pointing at a file
+        /// that turns out not to be there.
+        /// </summary>
+        public static string GetAvatarFilePath(string installPath, ulong steamId64)
+        {
+            if (string.IsNullOrEmpty(installPath) == true || steamId64 == 0)
+            {
+                return null;
+            }
+
+            try
+            {
+                var path = Path.Combine(installPath, "config", "loginusers.vdf");
+                var kv = KeyValue.LoadAsText(path);
+                if (kv == null)
+                {
+                    return null;
+                }
+
+                var idText = steamId64.ToString(CultureInfo.InvariantCulture);
+                var hash = kv["users"][idText]["avatar"].AsString(null);
+                if (string.IsNullOrEmpty(hash) == true)
+                {
+                    return null;
+                }
+
+                var avatarsDirectory = Path.Combine(installPath, "config", "avatars");
+                foreach (var fileName in new[] { hash + "_full.jpg", hash + ".jpg", hash + ".png" })
+                {
+                    var candidate = Path.Combine(avatarsDirectory, fileName);
+                    if (File.Exists(candidate) == true)
+                    {
+                        return candidate;
+                    }
+                }
+
+                return null;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
     }
 }

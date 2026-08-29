@@ -382,6 +382,9 @@ namespace SAM.Core.ViewModels
             ? this.ActivePersonaName
             : this.ActiveSteamIdText;
 
+        /// <summary>Path to the currently signed-in account's locally-cached avatar image, or null.</summary>
+        public string ActiveAvatarFilePath => this._Steam.ActiveAvatarFilePath;
+
         /// <summary>Asks Steam for the current stats. The reply arrives on a callback.</summary>
         public void BeginLoad()
         {

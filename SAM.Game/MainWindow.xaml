@@ -313,7 +313,8 @@
                 <!-- account + more actions -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0">
                     <controls:ActiveAccountBadge DisplayName="{Binding ActiveAccountDisplayName}"
-                                                  SteamIdText="{Binding ActiveSteamIdText}" />
+                                                  SteamIdText="{Binding ActiveSteamIdText}"
+                                                  AvatarFilePath="{Binding ActiveAvatarFilePath}" />
                     <Button x:Name="_MoreActionsButton"
                             Margin="8,0,0,0"
                             Style="{StaticResource Button.Ghost}"
@@ -412,6 +413,7 @@
                                          Padding="32,5,10,5"
                                          Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
                                 <Path Style="{StaticResource Icon.Stroked}"
+                                      Width="14" Height="14"
                                       Margin="10,0,0,0"
                                       HorizontalAlignment="Left"
                                       VerticalAlignment="Center"
@@ -419,7 +421,7 @@
                                       Stroke="{StaticResource Brush.Text.Muted}"
                                       IsHitTestVisible="False" />
                                 <TextBlock Style="{StaticResource Text.Caption}"
-                                           Margin="33,0,10,0"
+                                           Margin="32,0,10,0"
                                            VerticalAlignment="Center"
                                            Text="Search achievements"
                                            TextTrimming="CharacterEllipsis"

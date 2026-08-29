@@ -53,8 +53,10 @@ namespace SAM.Core.Steam
             // SteamUser is only null against a Client that never completed Initialize, which
             // production never constructs a service from -- guarded anyway, on the same
             // reasoning as the equivalent guard in SteamStatsService.
+            var installPath = API.Steam.GetInstallPath();
             this.ActiveSteamId = this._Client.SteamUser?.GetSteamId() ?? 0;
-            this.ActivePersonaName = LocalSteamProfile.GetPersonaName(API.Steam.GetInstallPath(), this.ActiveSteamId);
+            this.ActivePersonaName = LocalSteamProfile.GetPersonaName(installPath, this.ActiveSteamId);
+            this.ActiveAvatarFilePath = LocalSteamProfile.GetAvatarFilePath(installPath, this.ActiveSteamId);
         }
 
         public event Action<uint> AppDataChanged;
@@ -66,6 +68,8 @@ namespace SAM.Core.Steam
         public ulong ActiveSteamId { get; }
 
         public string ActivePersonaName { get; }
+
+        public string ActiveAvatarFilePath { get; }
 
         public string CurrentLanguage => this._Client.SteamApps008.GetCurrentGameLanguage();
 

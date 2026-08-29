@@ -90,7 +90,7 @@
 
     <!-- Metrics -->
     <CornerRadius x:Key="Radius.Small">3</CornerRadius>
-    <CornerRadius x:Key="Radius.Medium">5</CornerRadius>
+    <CornerRadius x:Key="Radius.Medium">6</CornerRadius>
     <CornerRadius x:Key="Radius.Large">8</CornerRadius>
 
     <sys:Double x:Key="Size.Text.Caption">11</sys:Double>

@@ -1054,13 +1054,29 @@ namespace SAM.Tests
         [Fact]
         public void ActiveAccountPropertiesAreReadThroughFromTheSteamService()
         {
-            FakeStats steam = new() { InstallPath = null, ActiveSteamId = 76561197960287930UL, ActivePersonaName = "Alice" };
+            FakeStats steam = new()
+            {
+                InstallPath = null,
+                ActiveSteamId = 76561197960287930UL,
+                ActivePersonaName = "Alice",
+                ActiveAvatarFilePath = @"C:\Steam\config\avatars\abc123hash_full.jpg",
+            };
             AchievementManagerViewModel manager = new(steam, new FakeDialogService());
 
             Assert.Equal(76561197960287930UL, manager.ActiveSteamId);
             Assert.Equal("76561197960287930", manager.ActiveSteamIdText);
             Assert.Equal("Alice", manager.ActivePersonaName);
             Assert.Equal("Alice", manager.ActiveAccountDisplayName);
+            Assert.Equal(@"C:\Steam\config\avatars\abc123hash_full.jpg", manager.ActiveAvatarFilePath);
+        }
+
+        [Fact]
+        public void ActiveAvatarFilePathIsNullWhenNoAvatarWasFound()
+        {
+            FakeStats steam = new() { InstallPath = null, ActiveAvatarFilePath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+
+            Assert.Null(manager.ActiveAvatarFilePath);
         }
 
         [Fact]

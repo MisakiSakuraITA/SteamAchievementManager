@@ -26,6 +26,8 @@ namespace SAM.Tests
 
         public string ActivePersonaName { get; set; } = "TestUser";
 
+        public string ActiveAvatarFilePath { get; set; }
+
         public event Action<uint> AppDataChanged;
 
         public event Action Disconnected;
@@ -117,6 +119,8 @@ namespace SAM.Tests
         public ulong ActiveSteamId { get; set; } = 76561197960287930UL;
 
         public string ActivePersonaName { get; set; } = "TestUser";
+
+        public string ActiveAvatarFilePath { get; set; }
 
         public event Action<int> UserStatsReceived;
 
