@@ -22,16 +22,20 @@
 
 using System.Threading.Tasks;
 using System.Windows;
+using Microsoft.Win32;
 using SAM.Core.ViewModels;
 
 namespace SAM.UI
 {
     /// <summary>
-    /// The shell's <see cref="IDialogService"/>: shows a Win32 message box and reports back
-    /// which button the user picked.
+    /// The shell's <see cref="IDialogService"/>: shows a Win32 message box or file dialog and
+    /// reports back what the user chose.
     /// </summary>
     public sealed class MessageBoxDialogService : IDialogService
     {
+        private const string _SnapshotFilter =
+            "Snapshot files (*.json;*.csv)|*.json;*.csv|JSON snapshot (*.json)|*.json|CSV snapshot (*.csv)|*.csv|All files (*.*)|*.*";
+
         public Task<bool> ShowConfirmationAsync(string title, string message, DialogSeverity severity)
         {
             var icon = severity switch
@@ -43,6 +47,30 @@ namespace SAM.UI
 
             var result = MessageBox.Show(message, title, MessageBoxButton.YesNo, icon);
             return Task.FromResult(result == MessageBoxResult.Yes);
+        }
+
+        public Task<string> ShowSaveFileAsync(string suggestedFileName)
+        {
+            var dialog = new SaveFileDialog
+            {
+                FileName = suggestedFileName,
+                Filter = _SnapshotFilter,
+                DefaultExt = ".json",
+                AddExtension = true,
+            };
+
+            return Task.FromResult(dialog.ShowDialog() == true ? dialog.FileName : null);
+        }
+
+        public Task<string> ShowOpenFileAsync()
+        {
+            var dialog = new OpenFileDialog
+            {
+                Filter = _SnapshotFilter,
+                CheckFileExists = true,
+            };
+
+            return Task.FromResult(dialog.ShowDialog() == true ? dialog.FileName : null);
         }
     }
 }

@@ -221,11 +221,32 @@ namespace SAM.Tests
         public readonly List<(string Title, string Message, DialogSeverity Severity)> Calls = new();
         public readonly Queue<bool> Answers = new();
 
+        /// <summary>What <see cref="ShowSaveFileAsync"/> hands back; null simulates the user cancelling.</summary>
+        public string SaveFilePathToReturn;
+
+        /// <summary>What <see cref="ShowOpenFileAsync"/> hands back; null simulates the user cancelling.</summary>
+        public string OpenFilePathToReturn;
+
+        public readonly List<string> SaveFilePrompts = new();
+        public int OpenFilePromptCount;
+
         public Task<bool> ShowConfirmationAsync(string title, string message, DialogSeverity severity)
         {
             this.Calls.Add((title, message, severity));
             var answer = this.Answers.Count > 0 ? this.Answers.Dequeue() : false;
             return Task.FromResult(answer);
+        }
+
+        public Task<string> ShowSaveFileAsync(string suggestedFileName)
+        {
+            this.SaveFilePrompts.Add(suggestedFileName);
+            return Task.FromResult(this.SaveFilePathToReturn);
+        }
+
+        public Task<string> ShowOpenFileAsync()
+        {
+            this.OpenFilePromptCount++;
+            return Task.FromResult(this.OpenFilePathToReturn);
         }
     }
 }

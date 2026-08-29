@@ -7,6 +7,21 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [7.2.0] - 2026-08-28
+
+### Added
+
+- **Secret Achievement Revealer**: Hover peek and global toolbar toggle to reveal hidden
+  achievement details.
+- **Global Rarity Percentages**: Real-time Steam rarity data with gold highlights for
+  ultra-rare achievements (< 5%).
+- **Advanced Filtering & Sorting**: Sort by A-Z, unlock status, rarity, or hidden status;
+  quick-filter by hidden or ultra-rare.
+- **Queued Batch Store**: Sequential unlock store queue with live status-bar progress and
+  cancellation support.
+- **Snapshot Export/Import**: Export and restore achievements/statistics state to/from JSON
+  or CSV backup files.
+
 ## [7.1.2] - UX Polish, Keyboard Shortcuts & Accessibility Pass
 
 ### Added
@@ -105,7 +120,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Automatic Steam pipe disconnection detection that gates destructive commands once the
   connection is lost.
 
-[Unreleased]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.1.2...HEAD
+[Unreleased]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.2.0...HEAD
+[7.2.0]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.1.2...v7.2.0
 [7.1.2]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.1.1...v7.1.2
 [7.1.1]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.1.0...v7.1.1
 [7.1.0]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.0.0...v7.1.0

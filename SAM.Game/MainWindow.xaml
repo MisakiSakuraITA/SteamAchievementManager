@@ -293,6 +293,7 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0">
@@ -309,8 +310,29 @@
                     </StackPanel>
                 </StackPanel>
 
+                <!-- snapshot backup -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0">
+                    <Button Style="{StaticResource Button.Ghost}"
+                            Command="{Binding ExportSnapshotCommand}"
+                            ToolTip="Save the currently shown achievement and statistic state to a JSON or CSV file">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Style="{StaticResource Icon.Stroked}" Data="{StaticResource Icon.Save}" />
+                            <AccessText Margin="7,0,0,0" Text="E_xport Snapshot" />
+                        </StackPanel>
+                    </Button>
+                    <Button Margin="8,0,0,0"
+                            Style="{StaticResource Button.Ghost}"
+                            Command="{Binding ImportSnapshotCommand}"
+                            ToolTip="Load a snapshot file and stage its values for review before storing">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Style="{StaticResource Icon.Stroked}" Data="{StaticResource Icon.Refresh}" />
+                            <AccessText Margin="7,0,0,0" Text="_Import Snapshot" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
                 <!-- completion -->
-                <StackPanel Grid.Column="1" Width="260" VerticalAlignment="Center">
+                <StackPanel Grid.Column="2" Width="260" VerticalAlignment="Center">
                     <Grid>
                         <TextBlock Style="{StaticResource Text.Label}"
                                    HorizontalAlignment="Left"

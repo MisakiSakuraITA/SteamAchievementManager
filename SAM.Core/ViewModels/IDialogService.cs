@@ -47,5 +47,14 @@ namespace SAM.Core.ViewModels
     {
         /// <summary>Shows a yes/no question and returns whether the user chose yes.</summary>
         Task<bool> ShowConfirmationAsync(string title, string message, DialogSeverity severity);
+
+        /// <summary>
+        /// Asks where to save a new file. Returns the chosen path, or null if the user
+        /// cancelled.
+        /// </summary>
+        Task<string> ShowSaveFileAsync(string suggestedFileName);
+
+        /// <summary>Asks for an existing file to open. Returns null if the user cancelled.</summary>
+        Task<string> ShowOpenFileAsync();
     }
 }

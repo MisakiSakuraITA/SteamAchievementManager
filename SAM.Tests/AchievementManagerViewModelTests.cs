@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using SAM.Core.Snapshots;
 using SAM.Core.Steam.Schema;
 using SAM.Core.ViewModels;
 using Xunit;
@@ -816,6 +818,235 @@ namespace SAM.Tests
             manager.Load(BuildSchema(steam));
 
             Assert.False(manager.QueuedStoreCommand.CanExecute(null));
+        }
+
+        // ============================ snapshot export/import ============================
+
+        [Fact]
+        public void BuildSnapshotCapturesTheCurrentlyPendingAchievementAndStatisticState()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(BuildSchema(steam));
+
+            // ACH_A starts locked; stage it unlocked without storing.
+            manager.Achievements.First(a => a.Id == "ACH_A").IsUnlocked = true;
+            manager.Statistics[0].ValueText = "55";
+
+            var snapshot = manager.BuildSnapshot();
+
+            Assert.Equal(480u, snapshot.AppId);
+            Assert.True(snapshot.Achievements.Single(a => a.Id == "ACH_A").IsAchieved);
+            // Still unstored, so there is no real unlock time to report yet.
+            Assert.Null(snapshot.Achievements.Single(a => a.Id == "ACH_A").UnlockTime);
+            // ACH_B was already stored as achieved by BuildSchema, with a real unlock time.
+            Assert.Equal(new DateTime(2024, 1, 1), snapshot.Achievements.Single(a => a.Id == "ACH_B").UnlockTime);
+            Assert.Equal(55, snapshot.Statistics.Single(s => s.Id == "kills").Value);
+        }
+
+        [Fact]
+        public void ImportRejectsASnapshotRecordedForADifferentApp()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(BuildSchema(steam));
+
+            var errors = new List<string>();
+            manager.ErrorRaised += errors.Add;
+
+            var snapshot = new GameSnapshot
+            {
+                AppId = 999,
+                Achievements = new List<AchievementSnapshotEntry> { new() { Id = "ACH_A", IsAchieved = true } },
+            };
+
+            var applied = manager.TryApplySnapshot(snapshot);
+
+            Assert.False(applied);
+            Assert.Single(errors);
+            Assert.Contains("999", errors[0]);
+            Assert.False(manager.Achievements.First(a => a.Id == "ACH_A").IsUnlocked);
+            Assert.False(manager.IsModified);
+        }
+
+        [Fact]
+        public void ImportStagesMatchingAchievementsAndStatisticsWithoutStoringToSteam()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(BuildSchema(steam));
+
+            var infos = new List<string>();
+            manager.InfoRaised += infos.Add;
+
+            var snapshot = new GameSnapshot
+            {
+                AppId = manager.AppId,
+                Achievements = new List<AchievementSnapshotEntry>
+                {
+                    new() { Id = "ACH_A", IsAchieved = true },
+                    new() { Id = "ACH_B", IsAchieved = false },
+                },
+                Statistics = new List<StatisticSnapshotEntry> { new() { Id = "kills", Value = 55 } },
+            };
+
+            var applied = manager.TryApplySnapshot(snapshot);
+
+            Assert.True(applied);
+            Assert.True(manager.Achievements.First(a => a.Id == "ACH_A").IsUnlocked);
+            Assert.False(manager.Achievements.First(a => a.Id == "ACH_B").IsUnlocked);
+            Assert.Equal("55", manager.Statistics[0].ValueText);
+            Assert.True(manager.IsModified);
+            // Staged for review only -- nothing has actually reached Steam.
+            Assert.Equal(0, steam.StoreCallCount);
+            Assert.NotEmpty(infos);
+        }
+
+        [Fact]
+        public void ImportSilentlySkipsAProtectedAchievementJustLikeABulkToggleWould()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(BuildSchema(steam)); // ACH_C is protected (Permission = 1).
+
+            var rejections = 0;
+            manager.ProtectedChangeRejected += _ => rejections++;
+
+            var snapshot = new GameSnapshot
+            {
+                AppId = manager.AppId,
+                Achievements = new List<AchievementSnapshotEntry> { new() { Id = "ACH_C", IsAchieved = true } },
+            };
+
+            manager.TryApplySnapshot(snapshot);
+
+            Assert.False(manager.Achievements.First(a => a.Id == "ACH_C").IsUnlocked);
+            Assert.Equal(0, rejections);
+            Assert.False(manager.IsModified);
+        }
+
+        [Fact]
+        public void ImportSkipsIdsThatAreNotPartOfTheLoadedSchema()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+            manager.Load(BuildSchema(steam));
+
+            var infos = new List<string>();
+            manager.InfoRaised += infos.Add;
+
+            var snapshot = new GameSnapshot
+            {
+                AppId = manager.AppId,
+                Achievements = new List<AchievementSnapshotEntry> { new() { Id = "ACH_NOPE", IsAchieved = true } },
+                Statistics = new List<StatisticSnapshotEntry> { new() { Id = "not-a-real-stat", Value = 1 } },
+            };
+
+            var applied = manager.TryApplySnapshot(snapshot);
+
+            Assert.True(applied);
+            Assert.False(manager.IsModified);
+            Assert.Contains(infos, m => m.Contains("did not match"));
+        }
+
+        [Fact]
+        public async Task ExportSnapshotCommandWritesAFileAtTheDialogChosenPath()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            var dialogs = new FakeDialogService();
+            AchievementManagerViewModel manager = new(steam, dialogs);
+            manager.Load(BuildSchema(steam));
+
+            manager.Achievements.First(a => a.Id == "ACH_A").IsUnlocked = true;
+
+            var path = Path.Combine(Path.GetTempPath(), $"sam-export-{Guid.NewGuid():N}.json");
+            dialogs.SaveFilePathToReturn = path;
+            try
+            {
+                var infos = new List<string>();
+                manager.InfoRaised += infos.Add;
+
+                await manager.ExportSnapshotCommand.ExecuteAsync(null);
+
+                Assert.True(File.Exists(path));
+                var snapshot = GameSnapshotSerializer.FromJson(File.ReadAllText(path));
+                Assert.Equal(480u, snapshot.AppId);
+                Assert.True(snapshot.Achievements.Single(a => a.Id == "ACH_A").IsAchieved);
+                Assert.NotEmpty(infos);
+            }
+            finally
+            {
+                if (File.Exists(path) == true)
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+
+        [Fact]
+        public async Task ExportSnapshotCommandDoesNothingWhenTheSaveDialogIsCancelled()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            var dialogs = new FakeDialogService();
+            AchievementManagerViewModel manager = new(steam, dialogs);
+            manager.Load(BuildSchema(steam));
+
+            var infos = new List<string>();
+            manager.InfoRaised += infos.Add;
+
+            await manager.ExportSnapshotCommand.ExecuteAsync(null);
+
+            Assert.Single(dialogs.SaveFilePrompts);
+            Assert.Empty(infos);
+        }
+
+        [Fact]
+        public async Task ImportSnapshotCommandAppliesAFileWrittenToDiskByExport()
+        {
+            FakeStats exportSteam = new() { InstallPath = null };
+            var exportDialogs = new FakeDialogService();
+            AchievementManagerViewModel exporter = new(exportSteam, exportDialogs);
+            exporter.Load(BuildSchema(exportSteam));
+            exporter.Achievements.First(a => a.Id == "ACH_A").IsUnlocked = true;
+
+            var path = Path.Combine(Path.GetTempPath(), $"sam-import-{Guid.NewGuid():N}.csv");
+            exportDialogs.SaveFilePathToReturn = path;
+            try
+            {
+                await exporter.ExportSnapshotCommand.ExecuteAsync(null);
+
+                FakeStats importSteam = new() { InstallPath = null };
+                var importDialogs = new FakeDialogService { OpenFilePathToReturn = path };
+                AchievementManagerViewModel importer = new(importSteam, importDialogs);
+                importer.Load(BuildSchema(importSteam));
+
+                Assert.False(importer.Achievements.First(a => a.Id == "ACH_A").IsUnlocked);
+
+                await importer.ImportSnapshotCommand.ExecuteAsync(null);
+
+                Assert.True(importer.Achievements.First(a => a.Id == "ACH_A").IsUnlocked);
+                Assert.Equal(0, importSteam.StoreCallCount);
+            }
+            finally
+            {
+                if (File.Exists(path) == true)
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+
+        [Fact]
+        public void ExportSnapshotCommandCannotExecuteBeforeAnythingIsLoaded()
+        {
+            FakeStats steam = new() { InstallPath = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+
+            Assert.False(manager.ExportSnapshotCommand.CanExecute(null));
+
+            manager.Load(BuildSchema(steam));
+
+            Assert.True(manager.ExportSnapshotCommand.CanExecute(null));
         }
     }
 }

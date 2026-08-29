@@ -22,9 +22,13 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using SAM.Core.Snapshots;
 using SAM.Core.Steam;
 using SAM.Core.Steam.Schema;
 using SAM.Core.Threading;
@@ -127,6 +131,8 @@ namespace SAM.Core.ViewModels
             this.ResetAllCommand = new(this.ResetAllAsync, this.CanReachSteam);
             this.QueuedStoreCommand = new(this.RunQueuedStoreAsync, () => this.CanReachSteam() && this.IsModified == true);
             this.CancelQueuedStoreCommand = new(this.CancelQueuedStore, () => this._IsQueuedStoreRunning == true);
+            this.ExportSnapshotCommand = new(this.ExportSnapshotAsync, this.CanExportSnapshot);
+            this.ImportSnapshotCommand = new(this.ImportSnapshotAsync, this.CanReachSteam);
 
             this._Steam.UserStatsReceived += this.OnUserStatsReceived;
             this._Steam.Disconnected += this.OnSteamDisconnected;
@@ -159,6 +165,12 @@ namespace SAM.Core.ViewModels
         public AsyncRelayCommand QueuedStoreCommand { get; }
 
         public RelayCommand CancelQueuedStoreCommand { get; }
+
+        /// <summary>Saves the currently-shown achievement and statistic state to a file.</summary>
+        public AsyncRelayCommand ExportSnapshotCommand { get; }
+
+        /// <summary>Loads a snapshot file and stages its values for review before a store.</summary>
+        public AsyncRelayCommand ImportSnapshotCommand { get; }
 
         /// <summary>Raised with a message the shell should show as an error.</summary>
         public event Action<string> ErrorRaised;
@@ -982,6 +994,198 @@ namespace SAM.Core.ViewModels
         }
 
         /// <summary>
+        /// Captures the achievement and statistic state currently shown -- including whatever
+        /// is only staged, not yet stored -- as a portable snapshot. An achievement's recorded
+        /// state is its pending <see cref="AchievementViewModel.IsUnlocked"/> rather than its
+        /// last-stored <see cref="AchievementViewModel.IsAchieved"/>, so a snapshot taken with
+        /// edits still pending captures what the user is looking at, not only what Steam has
+        /// confirmed; a statistic's recorded value is likewise its pending value.
+        /// </summary>
+        internal GameSnapshot BuildSnapshot()
+        {
+            return new GameSnapshot
+            {
+                AppId = this.AppId,
+                Timestamp = DateTime.UtcNow,
+                Achievements = this._AllAchievements
+                    .Select(a => new AchievementSnapshotEntry
+                    {
+                        Id = a.Id,
+                        IsAchieved = a.IsUnlocked,
+                        UnlockTime = a.UnlockTime,
+                    })
+                    .ToList(),
+                Statistics = this._AllStatistics
+                    .Select(s => new StatisticSnapshotEntry { Id = s.Id, Value = ReadStatValue(s) })
+                    .ToList(),
+            };
+        }
+
+        private static double ReadStatValue(StatViewModel statistic) => statistic switch
+        {
+            IntegerStatViewModel integer => integer.Value,
+            FloatStatViewModel floatStat => floatStat.Value,
+            _ => 0d,
+        };
+
+        /// <summary>
+        /// Applies an imported snapshot as staged pending edits -- exactly as if the user had
+        /// set each matching achievement and statistic by hand -- so nothing reaches Steam
+        /// until an ordinary store. A snapshot recorded for a different app is refused outright,
+        /// since none of its ids can be assumed to mean anything against this app's schema. An
+        /// id the snapshot mentions that the loaded schema does not have is simply skipped, the
+        /// same way a bulk operation already skips a protected achievement.
+        /// </summary>
+        /// <remarks>
+        /// A snapshot's recorded <see cref="AchievementSnapshotEntry.UnlockTime"/> is never
+        /// applied here: this application only ever sets an unlock time at the moment of an
+        /// actual store (see <see cref="Store"/>), and importing is not an exception to that.
+        /// </remarks>
+        internal bool TryApplySnapshot(GameSnapshot snapshot)
+        {
+            if (snapshot == null)
+            {
+                throw new ArgumentNullException(nameof(snapshot));
+            }
+
+            if (snapshot.AppId != this.AppId)
+            {
+                this.ErrorRaised?.Invoke(
+                    _($"This snapshot is for app {snapshot.AppId}, not {this.AppId} ({this.GameName}). Import cancelled."));
+                return false;
+            }
+
+            var achievementsById = this._AllAchievements.ToDictionary(a => a.Id, StringComparer.Ordinal);
+            var statisticsById = this._AllStatistics.ToDictionary(s => s.Id, StringComparer.Ordinal);
+
+            var matchedAchievements = 0;
+            foreach (var entry in snapshot.Achievements ?? Enumerable.Empty<AchievementSnapshotEntry>())
+            {
+                if (string.IsNullOrEmpty(entry?.Id) == true || achievementsById.TryGetValue(entry.Id, out var achievement) == false)
+                {
+                    continue;
+                }
+
+                achievement.TrySetUnlocked(entry.IsAchieved);
+                matchedAchievements++;
+            }
+
+            var matchedStatistics = 0;
+            foreach (var entry in snapshot.Statistics ?? Enumerable.Empty<StatisticSnapshotEntry>())
+            {
+                if (string.IsNullOrEmpty(entry?.Id) == true || statisticsById.TryGetValue(entry.Id, out var statistic) == false)
+                {
+                    continue;
+                }
+
+                // The live statistic's own type decides how the value is formatted, not
+                // whatever a foreign or hand-edited snapshot file might claim.
+                statistic.ValueText = string.Equals(statistic.TypeName, "Integer", StringComparison.Ordinal) == true
+                    ? ((long)Math.Round(entry.Value)).ToString(CultureInfo.InvariantCulture)
+                    : entry.Value.ToString(CultureInfo.InvariantCulture);
+                matchedStatistics++;
+            }
+
+            if (matchedAchievements > 0)
+            {
+                this.AfterAchievementChange();
+            }
+
+            this.InfoRaised?.Invoke(matchedAchievements + matchedStatistics == 0
+                ? "The snapshot did not match any currently-loaded achievements or statistics."
+                : _($"Imported snapshot: staged {matchedAchievements} achievement(s) and {matchedStatistics} statistic(s) for review."));
+
+            return true;
+        }
+
+        private async Task ExportSnapshotAsync()
+        {
+            var suggestedName = _($"{SanitizeFileName(this.GameName)}_{DateTime.Now:yyyyMMdd_HHmmss}.json");
+
+            string path;
+            try
+            {
+                path = await this._DialogService.ShowSaveFileAsync(suggestedName).ConfigureAwait(true);
+            }
+            catch (Exception e)
+            {
+                this.ErrorRaised?.Invoke("Failed to open the save dialog:\n" + e.Message);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(path) == true)
+            {
+                return;
+            }
+
+            try
+            {
+                var snapshot = this.BuildSnapshot();
+                var text = GameSnapshotSerializer.DetectFormat(path) == SnapshotFileFormat.Csv
+                    ? GameSnapshotSerializer.ToCsv(snapshot)
+                    : GameSnapshotSerializer.ToJson(snapshot);
+                File.WriteAllText(path, text);
+                this.InfoRaised?.Invoke(_($"Exported snapshot to {Path.GetFileName(path)}."));
+            }
+            catch (Exception e)
+            {
+                this.ErrorRaised?.Invoke("Failed to export snapshot:\n" + e.Message);
+            }
+        }
+
+        private async Task ImportSnapshotAsync()
+        {
+            string path;
+            try
+            {
+                path = await this._DialogService.ShowOpenFileAsync().ConfigureAwait(true);
+            }
+            catch (Exception e)
+            {
+                this.ErrorRaised?.Invoke("Failed to open the import dialog:\n" + e.Message);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(path) == true)
+            {
+                return;
+            }
+
+            GameSnapshot snapshot;
+            try
+            {
+                var text = File.ReadAllText(path);
+                snapshot = GameSnapshotSerializer.DetectFormat(path) == SnapshotFileFormat.Csv
+                    ? GameSnapshotSerializer.FromCsv(text)
+                    : GameSnapshotSerializer.FromJson(text);
+            }
+            catch (Exception e)
+            {
+                this.ErrorRaised?.Invoke("Failed to read snapshot file:\n" + e.Message);
+                return;
+            }
+
+            this.TryApplySnapshot(snapshot);
+        }
+
+        /// <summary>Replaces characters a file name cannot contain, for a save dialog's suggested name.</summary>
+        private static string SanitizeFileName(string name)
+        {
+            if (string.IsNullOrEmpty(name) == true)
+            {
+                return "snapshot";
+            }
+
+            var invalid = Path.GetInvalidFileNameChars();
+            var builder = new StringBuilder(name.Length);
+            foreach (var c in name)
+            {
+                builder.Append(Array.IndexOf(invalid, c) >= 0 ? '_' : c);
+            }
+            return builder.ToString();
+        }
+
+        /// <summary>
         /// Reproduces the three-step confirmation the tool has always asked for before a reset.
         /// Resetting stats is not reversible.
         /// </summary>
@@ -1088,7 +1292,11 @@ namespace SAM.Core.ViewModels
             this.InvertAllCommand.RaiseCanExecuteChanged();
             this.ResetAllCommand.RaiseCanExecuteChanged();
             this.QueuedStoreCommand.RaiseCanExecuteChanged();
+            this.ExportSnapshotCommand.RaiseCanExecuteChanged();
+            this.ImportSnapshotCommand.RaiseCanExecuteChanged();
         }
+
+        private bool CanExportSnapshot() => this._IsBusy == false && (this._AllAchievements.Count > 0 || this._AllStatistics.Count > 0);
 
         private static string TranslateError(int id) => id switch
         {
