@@ -7,6 +7,17 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [7.2.4] - 2026-08-29
+
+### Fixed
+
+- **Search Box Alignment**: Text boxes now explicitly force left/center content alignment;
+  the search boxes' padding and their placeholder text's margin are aligned exactly, so
+  neither the caret nor the placeholder drifts from where typed text actually starts.
+- **Steam Profile Avatar Detection**: `GetAvatarFilePath` now also tries a `_medium` cache
+  variant and a per-account `userdata/<account id>/config/avatar.jpg` fallback before giving
+  up, still failing gracefully to no avatar rather than throwing.
+
 ## [7.2.3] - 2026-08-29
 
 ### Added
@@ -166,7 +177,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Automatic Steam pipe disconnection detection that gates destructive commands once the
   connection is lost.
 
-[Unreleased]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.2.3...HEAD
+[Unreleased]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.2.4...HEAD
+[7.2.4]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.2.3...v7.2.4
 [7.2.3]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.2.2...v7.2.3
 [7.2.2]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.2.1...v7.2.2
 [7.2.1]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.2.0...v7.2.1

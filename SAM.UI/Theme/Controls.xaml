@@ -274,6 +274,7 @@
         <Setter Property="CaretBrush" Value="{StaticResource Brush.Accent}" />
         <Setter Property="SelectionBrush" Value="{StaticResource Brush.Accent}" />
         <Setter Property="SelectionOpacity" Value="0.35" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <!-- Without this, WPF's own rectangular focus adorner draws on top of the rounded
              accent border this template already grows on focus below: the mismatched

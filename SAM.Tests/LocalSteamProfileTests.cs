@@ -38,6 +38,16 @@ namespace SAM.Tests
                 return fullPath;
             }
 
+            /// <summary>Writes a tiny placeholder file under userdata/&lt;accountId32&gt;/config/avatar.jpg.</summary>
+            public string WriteUserDataAvatarFile(uint accountId32)
+            {
+                var configDirectory = System.IO.Path.Combine(this.Path, "userdata", accountId32.ToString(), "config");
+                Directory.CreateDirectory(configDirectory);
+                var fullPath = System.IO.Path.Combine(configDirectory, "avatar.jpg");
+                File.WriteAllBytes(fullPath, new byte[] { 1, 2, 3 });
+                return fullPath;
+            }
+
             public void Dispose()
             {
                 try
@@ -163,11 +173,38 @@ namespace SAM.Tests
         }
 
         [Fact]
-        public void PrefersTheFullSuffixedJpgOverThePlainOneWhenBothExist()
+        public void PrefersTheFullSuffixedJpgOverEveryOtherVariantWhenAllExist()
         {
             using var install = new TempInstall();
             install.WriteLoginUsers(_Sample);
             var preferred = install.WriteAvatarFile("abc123hash_full.jpg");
+            install.WriteAvatarFile("abc123hash_medium.jpg");
+            install.WriteAvatarFile("abc123hash.jpg");
+            install.WriteAvatarFile("abc123hash.png");
+
+            var path = LocalSteamProfile.GetAvatarFilePath(install.Path, 76561197960287930UL);
+
+            Assert.Equal(preferred, path);
+        }
+
+        [Fact]
+        public void FallsBackToTheMediumJpgWhenOnlyThatExists()
+        {
+            using var install = new TempInstall();
+            install.WriteLoginUsers(_Sample);
+            var expected = install.WriteAvatarFile("abc123hash_medium.jpg");
+
+            var path = LocalSteamProfile.GetAvatarFilePath(install.Path, 76561197960287930UL);
+
+            Assert.Equal(expected, path);
+        }
+
+        [Fact]
+        public void PrefersTheMediumJpgOverThePlainJpgAndPngWhenBothExist()
+        {
+            using var install = new TempInstall();
+            install.WriteLoginUsers(_Sample);
+            var preferred = install.WriteAvatarFile("abc123hash_medium.jpg");
             install.WriteAvatarFile("abc123hash.jpg");
             install.WriteAvatarFile("abc123hash.png");
 
@@ -228,6 +265,73 @@ namespace SAM.Tests
             install.WriteLoginUsers("\"users\"\n{\n\t\"orphaned-key\"\n}\n");
 
             var path = LocalSteamProfile.GetAvatarFilePath(install.Path, 76561197960287930UL);
+
+            Assert.Null(path);
+        }
+
+        // ============================ userdata fallback ============================
+
+        private const ulong _SteamId = 76561197960287930UL;
+        private static readonly uint _AccountId32 = (uint)(_SteamId & 0xFFFFFFFFUL);
+
+        [Fact]
+        public void FallsBackToTheUserDataAvatarWhenTheHashBasedCacheHasNothing()
+        {
+            using var install = new TempInstall();
+            install.WriteLoginUsers(_Sample);
+            var expected = install.WriteUserDataAvatarFile(_AccountId32);
+            // Deliberately not writing anything under config/avatars/.
+
+            var path = LocalSteamProfile.GetAvatarFilePath(install.Path, _SteamId);
+
+            Assert.Equal(expected, path);
+        }
+
+        [Fact]
+        public void PrefersTheHashBasedCacheOverTheUserDataFallbackWhenBothExist()
+        {
+            using var install = new TempInstall();
+            install.WriteLoginUsers(_Sample);
+            var preferred = install.WriteAvatarFile("abc123hash_full.jpg");
+            install.WriteUserDataAvatarFile(_AccountId32);
+
+            var path = LocalSteamProfile.GetAvatarFilePath(install.Path, _SteamId);
+
+            Assert.Equal(preferred, path);
+        }
+
+        [Fact]
+        public void FallsBackToTheUserDataAvatarWhenLoginUsersVdfIsEntirelyMissing()
+        {
+            using var install = new TempInstall();
+            // Deliberately not writing loginusers.vdf at all.
+            var expected = install.WriteUserDataAvatarFile(_AccountId32);
+
+            var path = LocalSteamProfile.GetAvatarFilePath(install.Path, _SteamId);
+
+            Assert.Equal(expected, path);
+        }
+
+        [Fact]
+        public void FallsBackToTheUserDataAvatarWhenLoginUsersVdfIsCorrupt()
+        {
+            using var install = new TempInstall();
+            install.WriteLoginUsers("\"users\"\n{\n\t\"orphaned-key\"\n}\n");
+            var expected = install.WriteUserDataAvatarFile(_AccountId32);
+
+            var path = LocalSteamProfile.GetAvatarFilePath(install.Path, _SteamId);
+
+            Assert.Equal(expected, path);
+        }
+
+        [Fact]
+        public void ReturnsNullWhenNeitherTheHashBasedCacheNorTheUserDataAvatarExist()
+        {
+            using var install = new TempInstall();
+            install.WriteLoginUsers(_Sample);
+            // Deliberately writing nothing under either config/avatars/ or userdata/.
+
+            var path = LocalSteamProfile.GetAvatarFilePath(install.Path, _SteamId);
 
             Assert.Null(path);
         }

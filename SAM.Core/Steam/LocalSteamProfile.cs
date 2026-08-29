@@ -79,11 +79,22 @@ namespace SAM.Core.Steam
         /// <summary>
         /// Resolves the locally-cached avatar image for <paramref name="steamId64"/>: the
         /// hash Steam recorded for it in <c>loginusers.vdf</c>, then whichever of the file
-        /// names Steam's own avatar cache has used over the years actually exists on disk.
-        /// Best-effort, exactly like <see cref="GetPersonaName"/>: returns
+        /// names Steam's own avatar cache has used over the years actually exists on disk, and
+        /// failing that, a per-account file under <c>userdata</c> that a Steam install may
+        /// have instead. Best-effort, exactly like <see cref="GetPersonaName"/>: returns
         /// <see langword="null"/> rather than throwing, and rather than pointing at a file
         /// that turns out not to be there.
         /// </summary>
+        /// <remarks>
+        /// Every candidate below is tried purely as "does this file exist" -- a candidate this
+        /// install's Steam version never wrote is simply skipped, at the cost of nothing but
+        /// one more <see cref="File.Exists"/> check, so the list can be generous without risk.
+        /// One thing this deliberately does not do: guess a registry location for the avatar
+        /// hash itself. <see cref="Steam.GetInstallPath"/> reads a real, documented registry
+        /// value, but nothing about an avatar hash is known to live in the registry at all --
+        /// inventing a key on the chance one might exist would only add a lookup that can never
+        /// succeed.
+        /// </remarks>
         public static string GetAvatarFilePath(string installPath, ulong steamId64)
         {
             if (string.IsNullOrEmpty(installPath) == true || steamId64 == 0)
@@ -93,28 +104,39 @@ namespace SAM.Core.Steam
 
             try
             {
+                // The hash-named cache under config/avatars is tried first, since it is keyed
+                // to the exact avatar Steam last recorded rather than just the account -- but
+                // a missing or unreadable loginusers.vdf must not skip the fallback below,
+                // which needs nothing from it.
                 var path = Path.Combine(installPath, "config", "loginusers.vdf");
                 var kv = KeyValue.LoadAsText(path);
-                if (kv == null)
+                if (kv != null)
                 {
-                    return null;
-                }
-
-                var idText = steamId64.ToString(CultureInfo.InvariantCulture);
-                var hash = kv["users"][idText]["avatar"].AsString(null);
-                if (string.IsNullOrEmpty(hash) == true)
-                {
-                    return null;
-                }
-
-                var avatarsDirectory = Path.Combine(installPath, "config", "avatars");
-                foreach (var fileName in new[] { hash + "_full.jpg", hash + ".jpg", hash + ".png" })
-                {
-                    var candidate = Path.Combine(avatarsDirectory, fileName);
-                    if (File.Exists(candidate) == true)
+                    var idText = steamId64.ToString(CultureInfo.InvariantCulture);
+                    var hash = kv["users"][idText]["avatar"].AsString(null);
+                    if (string.IsNullOrEmpty(hash) == false)
                     {
-                        return candidate;
+                        var avatarsDirectory = Path.Combine(installPath, "config", "avatars");
+                        foreach (var fileName in new[] { hash + "_full.jpg", hash + "_medium.jpg", hash + ".jpg", hash + ".png" })
+                        {
+                            var candidate = Path.Combine(avatarsDirectory, fileName);
+                            if (File.Exists(candidate) == true)
+                            {
+                                return candidate;
+                            }
+                        }
                     }
+                }
+
+                // The account's 32-bit id -- the low 32 bits of its SteamID64 -- names its
+                // folder under userdata, independently of whatever avatar hash (or lack of
+                // one) loginusers.vdf recorded.
+                var accountId32 = (uint)(steamId64 & 0xFFFFFFFFUL);
+                var userDataCandidate = Path.Combine(
+                    installPath, "userdata", accountId32.ToString(CultureInfo.InvariantCulture), "config", "avatar.jpg");
+                if (File.Exists(userDataCandidate) == true)
+                {
+                    return userDataCandidate;
                 }
 
                 return null;
