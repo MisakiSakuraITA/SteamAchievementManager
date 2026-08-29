@@ -1048,5 +1048,29 @@ namespace SAM.Tests
 
             Assert.True(manager.ExportSnapshotCommand.CanExecute(null));
         }
+
+        // ============================ active account ============================
+
+        [Fact]
+        public void ActiveAccountPropertiesAreReadThroughFromTheSteamService()
+        {
+            FakeStats steam = new() { InstallPath = null, ActiveSteamId = 76561197960287930UL, ActivePersonaName = "Alice" };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+
+            Assert.Equal(76561197960287930UL, manager.ActiveSteamId);
+            Assert.Equal("76561197960287930", manager.ActiveSteamIdText);
+            Assert.Equal("Alice", manager.ActivePersonaName);
+            Assert.Equal("Alice", manager.ActiveAccountDisplayName);
+        }
+
+        [Fact]
+        public void ActiveAccountDisplayNameFallsBackToTheSteamIdWhenThePersonaNameIsUnknown()
+        {
+            FakeStats steam = new() { InstallPath = null, ActiveSteamId = 76561197960287930UL, ActivePersonaName = null };
+            AchievementManagerViewModel manager = new(steam, new FakeDialogService());
+
+            Assert.Null(manager.ActivePersonaName);
+            Assert.Equal("76561197960287930", manager.ActiveAccountDisplayName);
+        }
     }
 }

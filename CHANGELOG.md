@@ -7,6 +7,20 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [7.2.1] - 2026-08-29
+
+### Added
+
+- **Active Steam Profile Badge**: Displays the current Steam account's persona name and
+  SteamID64 in the header of both windows.
+- **Custom Protocol Handler (`sam://`)**: An opt-in, per-user `sam://game/{appid}` URI
+  handler for launching SAM directly from Playnite, LaunchBox, or the Windows Run dialog.
+
+### Changed
+
+- **UI Simplification & Polish**: Redesigned toolbars with clean iconography, a unified
+  visual hierarchy, decluttered headers, and improved dark theme spacing.
+
 ## [7.2.0] - 2026-08-28
 
 ### Added
@@ -120,7 +134,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Automatic Steam pipe disconnection detection that gates destructive commands once the
   connection is lost.
 
-[Unreleased]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.2.0...HEAD
+[Unreleased]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.2.1...HEAD
+[7.2.1]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.2.0...v7.2.1
 [7.2.0]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.1.2...v7.2.0
 [7.1.2]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.1.1...v7.1.2
 [7.1.1]: https://github.com/MisakiSakuraITA/SteamAchievementManager/compare/v7.1.0...v7.1.1

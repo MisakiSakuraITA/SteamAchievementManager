@@ -111,6 +111,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -135,9 +136,54 @@
 
         <controls:NotificationBanner x:Name="_Notification" Grid.Row="1" />
 
-        <!-- ============================ toolbar ============================ -->
+        <!-- ============================ header ============================ -->
 
         <Border Grid.Row="2"
+                Background="{StaticResource Brush.Bg.Surface}"
+                BorderBrush="{StaticResource Brush.Border.Subtle}"
+                BorderThickness="0,0,0,1"
+                Padding="18,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0"
+                           Style="{StaticResource Text.Title}"
+                           VerticalAlignment="Center"
+                           Text="Steam Achievement Manager" />
+
+                <!-- account + tools -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <controls:ActiveAccountBadge DisplayName="{Binding ActiveAccountDisplayName}"
+                                                  SteamIdText="{Binding ActiveSteamIdText}" />
+                    <Button x:Name="_ToolsButton"
+                            Margin="8,0,0,0"
+                            Style="{StaticResource Button.Ghost}"
+                            Click="OnToolsButtonClick"
+                            ToolTip="More actions"
+                            AutomationProperties.Name="Tools">
+                        <Path Style="{StaticResource Icon.Stroked}" Data="{StaticResource Icon.Tools}" />
+                        <Button.ContextMenu>
+                            <ContextMenu Placement="Bottom"
+                                         PlacementTarget="{Binding ElementName=_ToolsButton}"
+                                         DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                <MenuItem Header="Register sam:// Protocol"
+                                          IsCheckable="True"
+                                          IsChecked="{Binding IsProtocolRegistered, Mode=OneWay}"
+                                          Command="{Binding ToggleProtocolRegistrationCommand}"
+                                          ToolTip="Let links like sam://game/440 (from Playnite, LaunchBox, or the Run dialog) launch SAM directly" />
+                            </ContextMenu>
+                        </Button.ContextMenu>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ============================ toolbar ============================ -->
+
+        <Border Grid.Row="3"
                 Background="{StaticResource Brush.Bg.Surface}"
                 BorderBrush="{StaticResource Brush.Border.Subtle}"
                 BorderThickness="0,0,0,1"
@@ -177,10 +223,10 @@
 
                 <!-- filters -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <CheckBox Content="Games" IsChecked="{Binding ShowNormalGames}" />
-                    <CheckBox Content="Demos" Margin="14,0,0,0" IsChecked="{Binding ShowDemos}" />
-                    <CheckBox Content="Mods" Margin="14,0,0,0" IsChecked="{Binding ShowMods}" />
-                    <CheckBox Content="Junk" Margin="14,0,0,0" IsChecked="{Binding ShowJunk}" />
+                    <CheckBox Content="Games" ToolTip="Show normal games" IsChecked="{Binding ShowNormalGames}" />
+                    <CheckBox Content="Demos" Margin="14,0,0,0" ToolTip="Show demos" IsChecked="{Binding ShowDemos}" />
+                    <CheckBox Content="Mods" Margin="14,0,0,0" ToolTip="Show mods" IsChecked="{Binding ShowMods}" />
+                    <CheckBox Content="Junk" Margin="14,0,0,0" ToolTip="Show tools, soundtracks, and other non-game entries" IsChecked="{Binding ShowJunk}" />
                 </StackPanel>
 
                 <!-- sort -->
@@ -192,12 +238,15 @@
                           Stroke="{StaticResource Brush.Text.Muted}" />
                     <ToggleButton Style="{StaticResource Toggle.Segment}"
                                   Content="A-Z"
+                                  ToolTip="Alphabetical order"
                                   IsChecked="{Binding SortOrder, Converter={StaticResource EnumToBool}, ConverterParameter=NameAscending}" />
                     <ToggleButton Style="{StaticResource Toggle.Segment}"
                                   Content="Z-A"
+                                  ToolTip="Reverse alphabetical order"
                                   IsChecked="{Binding SortOrder, Converter={StaticResource EnumToBool}, ConverterParameter=NameDescending}" />
                     <ToggleButton Style="{StaticResource Toggle.Segment}"
                                   Content="App ID"
+                                  ToolTip="Order by Steam app id"
                                   IsChecked="{Binding SortOrder, Converter={StaticResource EnumToBool}, ConverterParameter=AppId}" />
                 </StackPanel>
 
@@ -238,7 +287,7 @@
 
         <!-- ============================ library ============================ -->
 
-        <Grid Grid.Row="3">
+        <Grid Grid.Row="4">
             <ListBox x:Name="_GameList"
                      Background="Transparent"
                      BorderThickness="0"
@@ -304,7 +353,7 @@
 
         <!-- ============================ status ============================ -->
 
-        <Border Grid.Row="4"
+        <Border Grid.Row="5"
                 Background="{StaticResource Brush.Bg.Surface}"
                 BorderBrush="{StaticResource Brush.Border.Subtle}"
                 BorderThickness="0,1,0,0"

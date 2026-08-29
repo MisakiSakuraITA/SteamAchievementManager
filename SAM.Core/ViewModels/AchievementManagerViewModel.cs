@@ -368,6 +368,20 @@ namespace SAM.Core.ViewModels
 
         public string DisconnectedMessage => _DisconnectedMessage;
 
+        /// <summary>The SteamID64 of the currently signed-in Steam account.</summary>
+        public ulong ActiveSteamId => this._Steam.ActiveSteamId;
+
+        /// <summary>Formatted twin of <see cref="ActiveSteamId"/>, for direct display.</summary>
+        public string ActiveSteamIdText => this.ActiveSteamId.ToString(CultureInfo.InvariantCulture);
+
+        /// <summary>The currently signed-in account's persona name, or null if unknown.</summary>
+        public string ActivePersonaName => this._Steam.ActivePersonaName;
+
+        /// <summary>The persona name when known, otherwise the SteamID64 -- the badge always has something to show.</summary>
+        public string ActiveAccountDisplayName => string.IsNullOrEmpty(this.ActivePersonaName) == false
+            ? this.ActivePersonaName
+            : this.ActiveSteamIdText;
+
         /// <summary>Asks Steam for the current stats. The reply arrives on a callback.</summary>
         public void BeginLoad()
         {

@@ -1,0 +1,79 @@
+/* Copyright (c) 2024 Rick (rick 'at' gibbed 'dot' us)
+ *
+ * This software is provided 'as-is', without any express or implied
+ * warranty. In no event will the authors be held liable for any damages
+ * arising from the use of this software.
+ *
+ * Permission is granted to anyone to use this software for any purpose,
+ * including commercial applications, and to alter it and redistribute it
+ * freely, subject to the following restrictions:
+ *
+ * 1. The origin of this software must not be misrepresented; you must not
+ *    claim that you wrote the original software. If you use this software
+ *    in a product, an acknowledgment in the product documentation would
+ *    be appreciated but is not required.
+ *
+ * 2. Altered source versions must be plainly marked as such, and must not
+ *    be misrepresented as being the original software.
+ *
+ * 3. This notice may not be removed or altered from any source
+ *    distribution.
+ */
+
+using System;
+using System.Globalization;
+using System.IO;
+
+namespace SAM.Core.Steam
+{
+    /// <summary>
+    /// Reads the locally-cached persona name for a SteamID64 out of Steam's own
+    /// <c>config/loginusers.vdf</c>.
+    /// </summary>
+    /// <remarks>
+    /// A live persona name is a property of <c>ISteamFriends::GetPersonaName</c>, an
+    /// interface this project has never bound. Binding it would mean guessing both a
+    /// Steamworks interface version string and the full, precisely-ordered vtable layout
+    /// behind it -- a much larger and less verifiable guess than wrapping an already-declared
+    /// slot on an interface already bound elsewhere in this project (compare
+    /// <c>SteamUserStats013.RequestGlobalAchievementPercentages</c>), and one where a wrong
+    /// guess is invoked as a raw function pointer against a live Steam client rather than
+    /// simply failing a unit test. Reading Steam's own login-users file instead -- the same
+    /// file every established third-party Steam tool already relies on for this -- gets the
+    /// name with no interop risk at all, at the cost of being only as fresh as Steam's last
+    /// write to it.
+    /// </remarks>
+    public static class LocalSteamProfile
+    {
+        /// <summary>
+        /// Looks up the persona name Steam last recorded for <paramref name="steamId64"/>.
+        /// Best-effort: returns <see langword="null"/> for anything from a missing install
+        /// path to a SteamID64 the file has no entry for, never throws.
+        /// </summary>
+        public static string GetPersonaName(string installPath, ulong steamId64)
+        {
+            if (string.IsNullOrEmpty(installPath) == true || steamId64 == 0)
+            {
+                return null;
+            }
+
+            try
+            {
+                var path = Path.Combine(installPath, "config", "loginusers.vdf");
+                var kv = KeyValue.LoadAsText(path);
+                if (kv == null)
+                {
+                    return null;
+                }
+
+                var idText = steamId64.ToString(CultureInfo.InvariantCulture);
+                var name = kv["users"][idText]["PersonaName"].AsString(null);
+                return string.IsNullOrEmpty(name) == true ? null : name;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+    }
+}

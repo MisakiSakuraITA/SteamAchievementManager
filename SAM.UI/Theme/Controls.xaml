@@ -789,4 +789,137 @@
         <Setter Property="SnapsToDevicePixels" Value="True" />
     </Style>
 
+    <!-- ============================ active account badge ============================ -->
+
+    <!-- Names the Steam account SAM is talking to. Deliberately quiet: a bordered chip that
+         reads at a glance without competing with the primary actions beside it. -->
+    <Style TargetType="{x:Type controls:ActiveAccountBadge}">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type controls:ActiveAccountBadge}">
+                    <Border Background="{StaticResource Brush.Bg.Overlay}"
+                            BorderBrush="{StaticResource Brush.Border.Subtle}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource Radius.Large}"
+                            Padding="7,5"
+                            SnapsToDevicePixels="True"
+                            ToolTip="{Binding DisplayName, RelativeSource={RelativeSource TemplatedParent}}">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="21" Height="21"
+                                    Background="{StaticResource Brush.Bg.Input}"
+                                    CornerRadius="11">
+                                <Path Style="{StaticResource Icon.Stroked}"
+                                      Width="11" Height="11"
+                                      Data="{StaticResource Icon.User}"
+                                      Stroke="{StaticResource Brush.Text.Muted}" />
+                            </Border>
+                            <StackPanel Margin="8,0,2,0" VerticalAlignment="Center">
+                                <TextBlock Style="{StaticResource Text.Label}"
+                                           Text="{TemplateBinding DisplayName}"
+                                           MaxWidth="160"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Style="{StaticResource Text.Mono}"
+                                           Margin="0,1,0,0"
+                                           Text="{TemplateBinding SteamIdText}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============================ tools menu ============================ -->
+
+    <!-- A dropdown for secondary, infrequent actions: kept out of the primary toolbar so it
+         does not compete with what the user reaches for on every visit. -->
+    <Style TargetType="{x:Type ContextMenu}">
+        <Setter Property="Background" Value="{StaticResource Brush.Bg.Elevated}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Brush.Border.Strong}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="4" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ContextMenu}">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{StaticResource Radius.Medium}"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <StackPanel IsItemsHost="True" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="{x:Type MenuItem}">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Ui}" />
+        <Setter Property="FontSize" Value="{StaticResource Size.Text.Body}" />
+        <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type MenuItem}">
+                    <Border x:Name="Root"
+                            Background="Transparent"
+                            CornerRadius="{StaticResource Radius.Small}"
+                            Padding="8,7"
+                            SnapsToDevicePixels="True">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="20" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <!-- Reserved whether or not this item is checkable, so a checkable
+                                 item's header lines up with every plain action beside it
+                                 instead of shifting the moment it is checked. -->
+                            <Path x:Name="Check"
+                                  Grid.Column="0"
+                                  Width="10" Height="10"
+                                  Stretch="Uniform"
+                                  Data="{StaticResource Icon.Check}"
+                                  Stroke="{StaticResource Brush.Accent}"
+                                  StrokeThickness="2"
+                                  StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round"
+                                  Visibility="Collapsed" />
+                            <ContentPresenter Grid.Column="1"
+                                              ContentSource="Header"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="{StaticResource Brush.Bg.Overlay}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Check" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4" />
+                            <Setter Property="Cursor" Value="Arrow" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="{x:Type Separator}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Separator}">
+                    <Border Height="1" Margin="6,4" Background="{StaticResource Brush.Border.Subtle}" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
 </ResourceDictionary>

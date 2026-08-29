@@ -23,9 +23,11 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using SAM.Core.Protocol;
 using SAM.Core.Steam;
 using SAM.Core.Threading;
 using static SAM.Core.InvariantShorthand;
@@ -54,6 +56,7 @@ namespace SAM.Core.ViewModels
 
         private readonly ISteamLibraryService _Steam;
         private readonly Func<CancellationToken, Task<List<GameListEntry>>> _CatalogLoader;
+        private readonly IProtocolHandlerService _ProtocolHandler;
         private readonly Dictionary<uint, GameViewModel> _AllGames;
         private readonly CancellationTokenSource _Shutdown;
         private readonly CancellationToken _ShutdownToken;
@@ -74,7 +77,13 @@ namespace SAM.Core.ViewModels
             "Steam is no longer running. Please launch Steam and restart the application.";
 
         public GameLibraryViewModel(ISteamLibraryService steam)
-            : this(steam, GameCatalog.LoadAsync)
+            : this(steam, GameCatalog.LoadAsync, NullProtocolHandlerService.Instance)
+        {
+        }
+
+        /// <summary>Overload that also accepts a real protocol-registration service.</summary>
+        public GameLibraryViewModel(ISteamLibraryService steam, IProtocolHandlerService protocolHandler)
+            : this(steam, GameCatalog.LoadAsync, protocolHandler)
         {
         }
 
@@ -85,9 +94,19 @@ namespace SAM.Core.ViewModels
         public GameLibraryViewModel(
             ISteamLibraryService steam,
             Func<CancellationToken, Task<List<GameListEntry>>> catalogLoader)
+            : this(steam, catalogLoader, NullProtocolHandlerService.Instance)
+        {
+        }
+
+        /// <summary>Fullest overload: every collaborator supplied explicitly.</summary>
+        public GameLibraryViewModel(
+            ISteamLibraryService steam,
+            Func<CancellationToken, Task<List<GameListEntry>>> catalogLoader,
+            IProtocolHandlerService protocolHandler)
         {
             this._Steam = steam ?? throw new ArgumentNullException(nameof(steam));
             this._CatalogLoader = catalogLoader ?? throw new ArgumentNullException(nameof(catalogLoader));
+            this._ProtocolHandler = protocolHandler ?? throw new ArgumentNullException(nameof(protocolHandler));
             this._AllGames = new();
             this._Shutdown = new();
             this._ShutdownToken = this._Shutdown.Token;
@@ -101,6 +120,7 @@ namespace SAM.Core.ViewModels
             this.LaunchCommand = new(
                 this.OnLaunchRequested,
                 _ => this._SelectedGame != null && this._IsSteamConnected == true);
+            this.ToggleProtocolRegistrationCommand = new(this.ToggleProtocolRegistration);
 
             this._Steam.AppDataChanged += this.OnAppDataChanged;
             this._Steam.Disconnected += this.OnSteamDisconnected;
@@ -115,11 +135,17 @@ namespace SAM.Core.ViewModels
 
         public RelayCommand LaunchCommand { get; }
 
+        /// <summary>Registers or unregisters the <c>sam://</c> protocol, whichever currently applies.</summary>
+        public RelayCommand ToggleProtocolRegistrationCommand { get; }
+
         /// <summary>Raised when the user activates a game and the shell should open it.</summary>
         public event Action<GameViewModel> LaunchRequested;
 
         /// <summary>Raised with a message the shell should show as an error.</summary>
         public event Action<string> ErrorRaised;
+
+        /// <summary>Raised with a message the shell should show as a confirmation.</summary>
+        public event Action<string> InfoRaised;
 
         public int TotalCount => this._AllGames.Count;
 
@@ -150,6 +176,23 @@ namespace SAM.Core.ViewModels
         public bool IsSteamDisconnected => this._IsSteamConnected == false;
 
         public string DisconnectedMessage => _DisconnectedMessage;
+
+        /// <summary>The SteamID64 of the currently signed-in Steam account.</summary>
+        public ulong ActiveSteamId => this._Steam.ActiveSteamId;
+
+        /// <summary>Formatted twin of <see cref="ActiveSteamId"/>, for direct display.</summary>
+        public string ActiveSteamIdText => this.ActiveSteamId.ToString(CultureInfo.InvariantCulture);
+
+        /// <summary>The currently signed-in account's persona name, or null if unknown.</summary>
+        public string ActivePersonaName => this._Steam.ActivePersonaName;
+
+        /// <summary>The persona name when known, otherwise the SteamID64 -- the badge always has something to show.</summary>
+        public string ActiveAccountDisplayName => string.IsNullOrEmpty(this.ActivePersonaName) == false
+            ? this.ActivePersonaName
+            : this.ActiveSteamIdText;
+
+        /// <summary>Whether this installation is currently registered to handle <c>sam://</c> links.</summary>
+        public bool IsProtocolRegistered => this._ProtocolHandler.IsRegistered;
 
         public string SearchText
         {
@@ -499,6 +542,35 @@ namespace SAM.Core.ViewModels
             }
 
             this.LaunchRequested?.Invoke(game);
+        }
+
+        /// <summary>
+        /// Registers the protocol if it is not currently registered, or removes the
+        /// registration if it is -- whichever the checkbox the user just clicked implied.
+        /// </summary>
+        private void ToggleProtocolRegistration()
+        {
+            try
+            {
+                if (this._ProtocolHandler.IsRegistered == true)
+                {
+                    this._ProtocolHandler.Unregister();
+                    this.InfoRaised?.Invoke("sam:// protocol handler removed.");
+                }
+                else
+                {
+                    this._ProtocolHandler.Register();
+                    this.InfoRaised?.Invoke("sam:// protocol handler registered. Links like sam://game/440 will now launch SAM.");
+                }
+            }
+            catch (Exception e)
+            {
+                this.ErrorRaised?.Invoke("Failed to update the sam:// protocol registration.\n\n" + e.Message);
+            }
+            finally
+            {
+                this.Raise(nameof(this.IsProtocolRegistered));
+            }
         }
     }
 }

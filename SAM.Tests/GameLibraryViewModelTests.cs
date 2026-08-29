@@ -270,5 +270,91 @@ namespace SAM.Tests
 
             library.Shutdown();
         }
+
+        // ============================ active account ============================
+
+        [Fact]
+        public void ActiveAccountPropertiesAreReadThroughFromTheSteamService()
+        {
+            FakeLibrary steam = new() { ActiveSteamId = 76561197960287930UL, ActivePersonaName = "Alice" };
+            var library = Build(steam, Enumerable.Empty<GameListEntry>());
+
+            Assert.Equal(76561197960287930UL, library.ActiveSteamId);
+            Assert.Equal("76561197960287930", library.ActiveSteamIdText);
+            Assert.Equal("Alice", library.ActivePersonaName);
+            Assert.Equal("Alice", library.ActiveAccountDisplayName);
+        }
+
+        [Fact]
+        public void ActiveAccountDisplayNameFallsBackToTheSteamIdWhenThePersonaNameIsUnknown()
+        {
+            FakeLibrary steam = new() { ActiveSteamId = 76561197960287930UL, ActivePersonaName = null };
+            var library = Build(steam, Enumerable.Empty<GameListEntry>());
+
+            Assert.Null(library.ActivePersonaName);
+            Assert.Equal("76561197960287930", library.ActiveAccountDisplayName);
+        }
+
+        // ============================ protocol registration ============================
+
+        [Fact]
+        public void ANewLibraryWithoutAProtocolHandlerReportsNotRegistered()
+        {
+            var library = Build(new FakeLibrary(), Enumerable.Empty<GameListEntry>());
+
+            Assert.False(library.IsProtocolRegistered);
+        }
+
+        [Fact]
+        public void TogglingRegistersWhenNotCurrentlyRegistered()
+        {
+            FakeLibrary steam = new();
+            FakeProtocolHandlerService protocolHandler = new();
+            GameLibraryViewModel library = new(steam, _ => Task.FromResult(new List<GameListEntry>()), protocolHandler);
+
+            var infos = new List<string>();
+            library.InfoRaised += infos.Add;
+
+            Assert.False(library.IsProtocolRegistered);
+
+            library.ToggleProtocolRegistrationCommand.Execute(null);
+
+            Assert.Equal(1, protocolHandler.RegisterCallCount);
+            Assert.Equal(0, protocolHandler.UnregisterCallCount);
+            Assert.True(library.IsProtocolRegistered);
+            Assert.NotEmpty(infos);
+        }
+
+        [Fact]
+        public void TogglingUnregistersWhenCurrentlyRegistered()
+        {
+            FakeLibrary steam = new();
+            FakeProtocolHandlerService protocolHandler = new();
+            protocolHandler.Register();
+            GameLibraryViewModel library = new(steam, _ => Task.FromResult(new List<GameListEntry>()), protocolHandler);
+
+            Assert.True(library.IsProtocolRegistered);
+
+            library.ToggleProtocolRegistrationCommand.Execute(null);
+
+            Assert.Equal(1, protocolHandler.UnregisterCallCount);
+            Assert.False(library.IsProtocolRegistered);
+        }
+
+        [Fact]
+        public void AFailedRegistrationIsReportedAndLeavesStateUnchanged()
+        {
+            FakeLibrary steam = new();
+            FakeProtocolHandlerService protocolHandler = new() { FailureToThrow = new InvalidOperationException("no permission") };
+            GameLibraryViewModel library = new(steam, _ => Task.FromResult(new List<GameListEntry>()), protocolHandler);
+
+            var errors = new List<string>();
+            library.ErrorRaised += errors.Add;
+
+            library.ToggleProtocolRegistrationCommand.Execute(null);
+
+            Assert.NotEmpty(errors);
+            Assert.False(library.IsProtocolRegistered);
+        }
     }
 }

@@ -47,6 +47,12 @@ namespace SAM.Core.Steam
             this._UserStatsReceivedCallback.OnRun += this.OnUserStatsReceived;
 
             this._Client.Disconnected += this.OnDisconnected;
+
+            // SteamUser is only null against a Client that never completed Initialize, which
+            // production never constructs a service from -- but several tests deliberately
+            // exercise this class against exactly that, so the guard is real, not decorative.
+            this.ActiveSteamId = this._Client.SteamUser?.GetSteamId() ?? 0;
+            this.ActivePersonaName = LocalSteamProfile.GetPersonaName(API.Steam.GetInstallPath(), this.ActiveSteamId);
         }
 
         public event Action<int> UserStatsReceived;
@@ -54,6 +60,10 @@ namespace SAM.Core.Steam
         public event Action Disconnected;
 
         public bool IsConnected => this._IsDisposed == false && this._Client.IsConnected;
+
+        public ulong ActiveSteamId { get; }
+
+        public string ActivePersonaName { get; }
 
         public uint AppId => this._AppId;
 

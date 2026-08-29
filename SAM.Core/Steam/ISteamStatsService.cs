@@ -91,5 +91,15 @@ namespace SAM.Core.Steam
         /// has completed for this app, or for an unrecognised achievement id.
         /// </summary>
         bool TryGetGlobalAchievementPercentage(string id, out double percentage);
+
+        /// <summary>The SteamID64 of the currently signed-in Steam account.</summary>
+        ulong ActiveSteamId { get; }
+
+        /// <summary>
+        /// The currently signed-in account's persona name, or <see langword="null"/> when it
+        /// could not be determined. See <see cref="LocalSteamProfile"/> for how this is
+        /// obtained and why.
+        /// </summary>
+        string ActivePersonaName { get; }
     }
 }

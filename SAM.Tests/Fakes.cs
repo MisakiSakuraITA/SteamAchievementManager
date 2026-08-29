@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using SAM.Core.Protocol;
 using SAM.Core.Steam;
 using SAM.Core.ViewModels;
 
@@ -21,6 +22,10 @@ namespace SAM.Tests
         public bool IsConnected { get; private set; } = true;
 
         public bool IsDisposed { get; private set; }
+
+        public ulong ActiveSteamId { get; set; } = 76561197960287930UL;
+
+        public string ActivePersonaName { get; set; } = "TestUser";
 
         public event Action<uint> AppDataChanged;
 
@@ -109,6 +114,10 @@ namespace SAM.Tests
         public bool IsConnected { get; private set; } = true;
 
         public bool IsDisposed { get; private set; }
+
+        public ulong ActiveSteamId { get; set; } = 76561197960287930UL;
+
+        public string ActivePersonaName { get; set; } = "TestUser";
 
         public event Action<int> UserStatsReceived;
 
@@ -247,6 +256,38 @@ namespace SAM.Tests
         {
             this.OpenFilePromptCount++;
             return Task.FromResult(this.OpenFilePathToReturn);
+        }
+    }
+
+    /// <summary>Stands in for the real, registry-backed protocol handler.</summary>
+    internal sealed class FakeProtocolHandlerService : IProtocolHandlerService
+    {
+        public bool IsRegistered { get; private set; }
+
+        public int RegisterCallCount;
+        public int UnregisterCallCount;
+
+        /// <summary>When set, Register/Unregister throw this instead of succeeding.</summary>
+        public Exception FailureToThrow;
+
+        public void Register()
+        {
+            this.RegisterCallCount++;
+            if (this.FailureToThrow != null)
+            {
+                throw this.FailureToThrow;
+            }
+            this.IsRegistered = true;
+        }
+
+        public void Unregister()
+        {
+            this.UnregisterCallCount++;
+            if (this.FailureToThrow != null)
+            {
+                throw this.FailureToThrow;
+            }
+            this.IsRegistered = false;
         }
     }
 }

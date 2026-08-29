@@ -24,6 +24,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using SAM.Core.IO;
@@ -364,6 +365,176 @@ namespace SAM.Core.Steam
             catch (Exception)
             {
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Reads and parses one of Steam's small, human-readable text config files (e.g.
+        /// <c>config/loginusers.vdf</c>) -- unlike <see cref="LoadAsBinaryAsync"/>, these are
+        /// a handful of kilobytes at most and read synchronously without a second thought.
+        /// Returns <see langword="null"/> for a missing file or anything this parser cannot
+        /// make sense of, exactly like the binary reader.
+        /// </summary>
+        public static KeyValue LoadAsText(string path)
+        {
+            try
+            {
+                if (File.Exists(path) == false)
+                {
+                    return null;
+                }
+
+                var bytes = File.ReadAllBytes(path);
+                if (bytes.LongLength > _MaximumSchemaLength)
+                {
+                    return null;
+                }
+
+                // Encoding.UTF8.GetString does not strip a byte-order mark on its own; left
+                // in place it would otherwise tokenize as a bogus leading value.
+                const char byteOrderMark = (char)0xFEFF;
+                var text = Encoding.UTF8.GetString(bytes).TrimStart(byteOrderMark);
+                return ParseText(text);
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>Internal rather than private purely so it can be driven directly by tests without disk access.</summary>
+        internal static KeyValue ParseText(string text)
+        {
+            try
+            {
+                var tokens = TokenizeText(text);
+                var position = 0;
+                KeyValue root = new() { Valid = true, Children = new() };
+                ReadTextChildren(tokens, ref position, root, 0);
+                return root;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Splits Valve's text key-values grammar into quoted strings, bare (unquoted) tokens,
+        /// and the two brace characters, discarding <c>//</c> line comments and whitespace.
+        /// </summary>
+        private static List<string> TokenizeText(string text)
+        {
+            List<string> tokens = new();
+            var i = 0;
+            var length = text.Length;
+
+            while (i < length)
+            {
+                var c = text[i];
+
+                if (char.IsWhiteSpace(c) == true)
+                {
+                    i++;
+                    continue;
+                }
+
+                if (c == '/' && i + 1 < length && text[i + 1] == '/')
+                {
+                    while (i < length && text[i] != '\n')
+                    {
+                        i++;
+                    }
+                    continue;
+                }
+
+                if (c == '{' || c == '}')
+                {
+                    tokens.Add(c.ToString());
+                    i++;
+                    continue;
+                }
+
+                if (c == '"')
+                {
+                    i++;
+                    StringBuilder value = new();
+                    while (i < length && text[i] != '"')
+                    {
+                        if (text[i] == '\\' && i + 1 < length)
+                        {
+                            switch (text[i + 1])
+                            {
+                                case 'n': value.Append('\n'); i += 2; continue;
+                                case 't': value.Append('\t'); i += 2; continue;
+                                case '\\': value.Append('\\'); i += 2; continue;
+                                case '"': value.Append('"'); i += 2; continue;
+                            }
+                        }
+                        value.Append(text[i]);
+                        i++;
+                    }
+                    i++; // closing quote, if the string was ever terminated
+                    tokens.Add(value.ToString());
+                    continue;
+                }
+
+                var start = i;
+                while (i < length && char.IsWhiteSpace(text[i]) == false && text[i] != '{' && text[i] != '}')
+                {
+                    i++;
+                }
+                tokens.Add(text.Substring(start, i - start));
+            }
+
+            return tokens;
+        }
+
+        /// <summary>
+        /// Reads a sequence of "name value" and "name { ... }" pairs into <paramref name="parent"/>,
+        /// stopping at a matching close brace (or the end of the token stream, for the
+        /// implicit top-level block). Depth-bounded for the same reason as the binary reader:
+        /// a malformed or adversarial file must fail cleanly rather than overflow the stack.
+        /// </summary>
+        private static void ReadTextChildren(List<string> tokens, ref int position, KeyValue parent, int depth)
+        {
+            if (depth > _MaximumNestingDepth)
+            {
+                throw new FormatException("Nested too deeply.");
+            }
+
+            while (position < tokens.Count)
+            {
+                var name = tokens[position];
+                if (name == "}")
+                {
+                    position++;
+                    return;
+                }
+
+                position++;
+                if (position >= tokens.Count)
+                {
+                    throw new FormatException("Unexpected end of input.");
+                }
+
+                var next = tokens[position];
+                if (next == "{")
+                {
+                    position++;
+                    KeyValue child = new() { Name = name, Valid = true, Children = new() };
+                    ReadTextChildren(tokens, ref position, child, depth + 1);
+                    parent.Children.Add(child);
+                }
+                else if (next == "}")
+                {
+                    throw new FormatException("Expected a value or a block.");
+                }
+                else
+                {
+                    position++;
+                    parent.Children.Add(new KeyValue { Name = name, Type = KeyValueType.String, Valid = true, Value = next });
+                }
             }
         }
     }

@@ -310,24 +310,29 @@
                     </StackPanel>
                 </StackPanel>
 
-                <!-- snapshot backup -->
+                <!-- account + tools -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0">
-                    <Button Style="{StaticResource Button.Ghost}"
-                            Command="{Binding ExportSnapshotCommand}"
-                            ToolTip="Save the currently shown achievement and statistic state to a JSON or CSV file">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Style="{StaticResource Icon.Stroked}" Data="{StaticResource Icon.Save}" />
-                            <AccessText Margin="7,0,0,0" Text="E_xport Snapshot" />
-                        </StackPanel>
-                    </Button>
-                    <Button Margin="8,0,0,0"
+                    <controls:ActiveAccountBadge DisplayName="{Binding ActiveAccountDisplayName}"
+                                                  SteamIdText="{Binding ActiveSteamIdText}" />
+                    <Button x:Name="_ToolsButton"
+                            Margin="8,0,0,0"
                             Style="{StaticResource Button.Ghost}"
-                            Command="{Binding ImportSnapshotCommand}"
-                            ToolTip="Load a snapshot file and stage its values for review before storing">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Style="{StaticResource Icon.Stroked}" Data="{StaticResource Icon.Refresh}" />
-                            <AccessText Margin="7,0,0,0" Text="_Import Snapshot" />
-                        </StackPanel>
+                            Click="OnToolsButtonClick"
+                            ToolTip="More actions"
+                            AutomationProperties.Name="Tools">
+                        <Path Style="{StaticResource Icon.Stroked}" Data="{StaticResource Icon.Tools}" />
+                        <Button.ContextMenu>
+                            <ContextMenu Placement="Bottom"
+                                         PlacementTarget="{Binding ElementName=_ToolsButton}"
+                                         DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                <MenuItem Header="E_xport Snapshot..."
+                                          Command="{Binding ExportSnapshotCommand}"
+                                          ToolTip="Save the currently shown achievement and statistic state to a JSON or CSV file" />
+                                <MenuItem Header="_Import Snapshot..."
+                                          Command="{Binding ImportSnapshotCommand}"
+                                          ToolTip="Load a snapshot file and stage its values for review before storing" />
+                            </ContextMenu>
+                        </Button.ContextMenu>
                     </Button>
                 </StackPanel>
 
@@ -397,15 +402,19 @@
                             <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0" VerticalAlignment="Center">
                                 <ToggleButton Style="{StaticResource Toggle.Segment}"
                                               Content="All"
+                                              ToolTip="Show every achievement"
                                               IsChecked="{Binding Filter, Converter={StaticResource EnumToBool}, ConverterParameter=All}" />
                                 <ToggleButton Style="{StaticResource Toggle.Segment}"
                                               Content="Locked"
+                                              ToolTip="Show only locked achievements"
                                               IsChecked="{Binding Filter, Converter={StaticResource EnumToBool}, ConverterParameter=Locked}" />
                                 <ToggleButton Style="{StaticResource Toggle.Segment}"
                                               Content="Unlocked"
+                                              ToolTip="Show only unlocked achievements"
                                               IsChecked="{Binding Filter, Converter={StaticResource EnumToBool}, ConverterParameter=Unlocked}" />
                                 <ToggleButton Style="{StaticResource Toggle.Segment}"
                                               Content="Hidden"
+                                              ToolTip="Show only hidden achievements"
                                               IsChecked="{Binding Filter, Converter={StaticResource EnumToBool}, ConverterParameter=Hidden}" />
                                 <ToggleButton Style="{StaticResource Toggle.Segment}"
                                               Content="Ultra-Rare"
@@ -454,6 +463,7 @@
                                               IsChecked="{Binding SortOrder, Converter={StaticResource EnumToBool}, ConverterParameter=Default}" />
                                 <ToggleButton Style="{StaticResource Toggle.Segment}"
                                               Content="A-Z"
+                                              ToolTip="Alphabetical order"
                                               IsChecked="{Binding SortOrder, Converter={StaticResource EnumToBool}, ConverterParameter=Alphabetical}" />
                                 <ToggleButton Style="{StaticResource Toggle.Segment}"
                                               Content="Status"
@@ -608,7 +618,7 @@
                 <StackPanel Grid.Column="3"
                             Orientation="Horizontal"
                             Visibility="{Binding IsQueuedStoreRunning, Converter={StaticResource BoolToCollapsed}}">
-                    <Button Style="{StaticResource Button.Ghost}" Command="{Binding ReloadCommand}">
+                    <Button Style="{StaticResource Button.Ghost}" Command="{Binding ReloadCommand}" ToolTip="Reload from Steam">
                         <StackPanel Orientation="Horizontal">
                             <Path Style="{StaticResource Icon.Stroked}" Data="{StaticResource Icon.Refresh}" />
                             <AccessText Margin="7,0,0,0" Text="_Reload" />
@@ -625,7 +635,8 @@
                     </Button>
                     <Button Margin="8,0,0,0"
                             Style="{StaticResource Button.Accent}"
-                            Command="{Binding StoreCommand}">
+                            Command="{Binding StoreCommand}"
+                            ToolTip="Store every pending achievement and statistic to Steam">
                         <StackPanel Orientation="Horizontal">
                             <Path Style="{StaticResource Icon.Stroked}"
                                   Data="{StaticResource Icon.Save}"
@@ -643,7 +654,9 @@
                                Margin="0,0,10,0"
                                VerticalAlignment="Center"
                                Text="{Binding QueuedStoreCompleted, StringFormat={}{0} stored}" />
-                    <Button Style="{StaticResource Button.Danger}" Command="{Binding CancelQueuedStoreCommand}">
+                    <Button Style="{StaticResource Button.Danger}"
+                            Command="{Binding CancelQueuedStoreCommand}"
+                            ToolTip="Stop the gradual store, keeping what has already been stored">
                         <AccessText Text="_Cancel" />
                     </Button>
                 </StackPanel>
