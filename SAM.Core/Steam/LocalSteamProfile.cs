@@ -79,8 +79,8 @@ namespace SAM.Core.Steam
         /// <summary>
         /// Resolves the locally-cached avatar image for <paramref name="steamId64"/>: the
         /// hash Steam recorded for it in <c>loginusers.vdf</c>, then whichever of the file
-        /// names Steam's own avatar cache has used over the years actually exists on disk, and
-        /// failing that, a per-account file under <c>userdata</c> that a Steam install may
+        /// names Steam's own avatar cache has used over the years actually exists on disk,
+        /// and failing that, a per-account file under <c>userdata</c> that a Steam install may
         /// have instead. Best-effort, exactly like <see cref="GetPersonaName"/>: returns
         /// <see langword="null"/> rather than throwing, and rather than pointing at a file
         /// that turns out not to be there.
@@ -90,7 +90,7 @@ namespace SAM.Core.Steam
         /// install's Steam version never wrote is simply skipped, at the cost of nothing but
         /// one more <see cref="File.Exists"/> check, so the list can be generous without risk.
         /// One thing this deliberately does not do: guess a registry location for the avatar
-        /// hash itself. <see cref="Steam.GetInstallPath"/> reads a real, documented registry
+        /// hash itself. <see cref="SAM.API.Steam.GetInstallPath"/> reads a real, documented registry
         /// value, but nothing about an avatar hash is known to live in the registry at all --
         /// inventing a key on the chance one might exist would only add a lookup that can never
         /// succeed.

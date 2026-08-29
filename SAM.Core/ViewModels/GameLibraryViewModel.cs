@@ -28,7 +28,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using SAM.Core.Steam;
-using SAM.Core.Threading;
 using static SAM.Core.InvariantShorthand;
 
 namespace SAM.Core.ViewModels

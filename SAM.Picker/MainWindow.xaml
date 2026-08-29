@@ -195,6 +195,7 @@
                           IsHitTestVisible="False" />
                     <TextBlock Style="{StaticResource Text.Caption}"
                                Margin="28,0,0,0"
+                               HorizontalAlignment="Left"
                                VerticalAlignment="Center"
                                Text="Search games"
                                TextTrimming="CharacterEllipsis"
@@ -240,7 +241,8 @@
                                  ToolTip="Show a single app by id"
                                  KeyDown="OnAddGameKeyDown" />
                         <TextBlock Style="{StaticResource Text.Caption}"
-                                   Margin="10,0,0,0"
+                                   Margin="8,0,0,0"
+                                   HorizontalAlignment="Left"
                                    VerticalAlignment="Center"
                                    Text="App ID"
                                    IsHitTestVisible="False"

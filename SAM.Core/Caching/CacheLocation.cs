@@ -102,7 +102,7 @@ namespace SAM.Core.Caching
         }
 
         /// <summary>
-        /// <see cref="Directory.CreateDirectory"/> succeeds on a directory that already exists
+        /// <see cref="Directory.CreateDirectory(string)"/> succeeds on a directory that already exists
         /// even when this process cannot write to it, which is exactly the shape of a locked-
         /// down or roaming profile: the first candidate resolves as usable, every real write
         /// afterwards fails silently, and the executable-adjacent fallback never gets a

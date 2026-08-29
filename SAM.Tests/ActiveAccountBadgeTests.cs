@@ -1,6 +1,9 @@
 using System;
 using System.IO;
 using System.Threading;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using SAM.UI.Controls;
 using Xunit;
@@ -45,6 +48,52 @@ namespace SAM.Tests
             var path = Path.Combine(Path.GetTempPath(), $"sam-avatar-{Guid.NewGuid():N}.png");
             File.WriteAllBytes(path, EncodePng(MakeBitmap(8, 8)));
             return path;
+        }
+
+        private static T FindChild<T>(DependencyObject root) where T : DependencyObject
+        {
+            if (root == null)
+            {
+                return null;
+            }
+            if (root is T found)
+            {
+                return found;
+            }
+            var count = VisualTreeHelper.GetChildrenCount(root);
+            for (int i = 0; i < count; i++)
+            {
+                var result = FindChild<T>(VisualTreeHelper.GetChild(root, i));
+                if (result != null)
+                {
+                    return result;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Shows the badge inside a real, off-screen window so its ControlTemplate is
+        /// actually applied -- unlike a bare <c>new ActiveAccountBadge()</c>, which never
+        /// triggers layout and so never proves the template's own bindings work, only that
+        /// the dependency properties behind them do.
+        /// </summary>
+        private static (Window Host, ActiveAccountBadge Badge) BuildHostedBadge()
+        {
+            ActiveAccountBadge badge = new();
+            Window host = new()
+            {
+                Content = badge,
+                Width = 200,
+                Height = 60,
+                ShowInTaskbar = false,
+                Left = -32000,
+                Top = -32000,
+                WindowStartupLocation = WindowStartupLocation.Manual,
+            };
+            host.Show();
+            WpfTestFixture.Pump();
+            return (host, badge);
         }
 
         /// <summary>
@@ -171,6 +220,49 @@ namespace SAM.Tests
                 {
                     badge.AvatarFilePath = null;
                     Assert.Null(badge.AvatarImageSource);
+                });
+            }
+            finally
+            {
+                if (File.Exists(path) == true)
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+
+        [Fact]
+        public void TheAppliedTemplateActuallyDisplaysTheLoadedAvatar()
+        {
+            // Unlike the other tests here, this one hosts the badge in a real, shown window,
+            // so its ControlTemplate is actually applied -- proving the template's own
+            // {Binding AvatarImageSource, RelativeSource=TemplatedParent} really does reach
+            // the rendered Image element, not just that the dependency property behind it
+            // updates correctly in isolation.
+            var path = WriteTempImage();
+            try
+            {
+                Window host = null;
+                ActiveAccountBadge badge = null;
+                this._Fixture.Invoke(() =>
+                {
+                    (host, badge) = BuildHostedBadge();
+                    badge.AvatarFilePath = path;
+                });
+
+                var loaded = this.WaitUntil(() => badge.AvatarImageSource != null, TimeSpan.FromSeconds(5));
+                Assert.True(loaded, "Avatar never finished loading.");
+
+                this._Fixture.Invoke(() =>
+                {
+                    WpfTestFixture.Pump();
+
+                    var image = FindChild<Image>(badge);
+                    Assert.NotNull(image);
+                    Assert.NotNull(image.Source);
+                    Assert.Same(badge.AvatarImageSource, image.Source);
+
+                    host.Close();
                 });
             }
             finally

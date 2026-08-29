@@ -225,10 +225,7 @@ namespace SAM.Tests
             Assert.Null(path);
         }
 
-        [Fact]
-        public void ReturnsNullWhenTheAccountHasNoAvatarHashRecorded()
-        {
-            const string sampleWithoutAvatar = @"
+        private const string _SampleWithoutAvatar = @"
 ""users""
 {
 	""76561197960287930""
@@ -237,9 +234,13 @@ namespace SAM.Tests
 	}
 }
 ";
+
+        [Fact]
+        public void ReturnsNullWhenTheAccountHasNoAvatarHashRecorded()
+        {
             using var install = new TempInstall();
-            install.WriteLoginUsers(sampleWithoutAvatar);
-            install.WriteAvatarFile("abc123hash_full.jpg");
+            install.WriteLoginUsers(_SampleWithoutAvatar);
+            // Deliberately not writing anything under config/avatars/ or userdata/.
 
             var path = LocalSteamProfile.GetAvatarFilePath(install.Path, 76561197960287930UL);
 

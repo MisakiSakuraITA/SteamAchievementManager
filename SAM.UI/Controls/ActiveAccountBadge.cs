@@ -134,7 +134,10 @@ namespace SAM.UI.Controls
                     return;
                 }
 
-                dispatcher.BeginInvoke(new Action(() =>
+                // Invoke rather than BeginInvoke: this background thread has nothing left to
+                // do once the result is handed off, so there is no reason not to simply wait
+                // for the marshal to land instead of firing it and moving on.
+                dispatcher.Invoke(new Action(() =>
                 {
                     // A newer path may have started loading (or cleared this one) while the
                     // decode above was in flight; only the most recent request may still win.

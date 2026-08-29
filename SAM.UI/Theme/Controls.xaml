@@ -276,6 +276,7 @@
         <Setter Property="SelectionOpacity" Value="0.35" />
         <Setter Property="HorizontalContentAlignment" Value="Left" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="TextAlignment" Value="Left" />
         <!-- Without this, WPF's own rectangular focus adorner draws on top of the rounded
              accent border this template already grows on focus below: the mismatched
              square corners over a rounded border is what reads as a clipped/cut-off edge. -->
@@ -289,10 +290,15 @@
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
                             CornerRadius="{StaticResource Radius.Medium}"
+                            HorizontalAlignment="Stretch"
                             SnapsToDevicePixels="True">
                         <ScrollViewer x:Name="PART_ContentHost"
                                       Margin="{TemplateBinding Padding}"
-                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                      Background="Transparent"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Left"
+                                      VerticalAlignment="Stretch"
+                                      VerticalContentAlignment="Center"
                                       Focusable="False"
                                       HorizontalScrollBarVisibility="Hidden"
                                       VerticalScrollBarVisibility="Hidden" />
@@ -795,12 +801,6 @@
         <Setter Property="SnapsToDevicePixels" Value="True" />
     </Style>
 
-    <Style x:Key="Rule.Horizontal" TargetType="{x:Type Rectangle}">
-        <Setter Property="Height" Value="1" />
-        <Setter Property="Fill" Value="{StaticResource Brush.Border.Subtle}" />
-        <Setter Property="SnapsToDevicePixels" Value="True" />
-    </Style>
-
     <!-- ============================ active account badge ============================ -->
 
     <!-- Names the Steam account SAM is talking to. Deliberately quiet: a bordered chip that
@@ -834,7 +834,7 @@
                                           Width="11" Height="11"
                                           Data="{StaticResource Icon.User}"
                                           Stroke="{StaticResource Brush.Text.Muted}" />
-                                    <Image Source="{Binding AvatarImageSource, RelativeSource={RelativeSource TemplatedParent}}"
+                                    <Image Source="{TemplateBinding AvatarImageSource}"
                                            Stretch="UniformToFill" />
                                 </Grid>
                             </Grid>
